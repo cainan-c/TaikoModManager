@@ -9,16 +9,26 @@ namespace TaikoModManager
         private bool _isPluginEnabled;
         private bool _isConfigPresent;
 
-        // e.g., "RF.TekaTeka.dll"
         public string DllName { get; set; }
-
-        // e.g., "TekaTeka"
         public string Name { get; set; }
-
         public string Description { get; set; }
 
-        // Points to the "config/RF.TekaTeka.cfg" file if it exists
+        // e.g., "BepInEx/config/RF.TekaTeka.cfg"
         public string ConfigPath { get; set; }
+
+        // The GitHub repository URL from .toml
+        private string _repoUrl;
+        public string RepoUrl
+        {
+            get => _repoUrl;
+            set
+            {
+                _repoUrl = value;
+                OnPropertyChanged();
+            }
+        }
+        // Helper for debugging if needed
+        public string GetRepoUrl() => RepoUrl;
 
         public bool IsConfigPresent
         {
@@ -30,19 +40,16 @@ namespace TaikoModManager
             }
         }
 
-        // Bound to the checkbox in the XAML
         public bool IsPluginEnabled
         {
             get => _isPluginEnabled;
             set
             {
-                if (_isPluginEnabled == value)
-                    return;
-
+                if (_isPluginEnabled == value) return;
                 _isPluginEnabled = value;
                 OnPropertyChanged();
 
-                // Whenever user toggles, we update the plugin's config file
+                // If the config file is found, update "Enabled = true/false" automatically
                 if (IsConfigPresent && !string.IsNullOrEmpty(ConfigPath))
                 {
                     UpdateEnabledInConfigFile(_isPluginEnabled);
@@ -50,30 +57,27 @@ namespace TaikoModManager
             }
         }
 
-        // Minimal approach: rewrite "Enabled = true/false" in the config file
+        /// <summary>
+        /// Updates the "Enabled" line in the plugin's config file (if found).
+        /// </summary>
         private void UpdateEnabledInConfigFile(bool newValue)
         {
             try
             {
-                // 1) Read all lines
                 var lines = System.IO.File.ReadAllLines(ConfigPath);
                 for (int i = 0; i < lines.Length; i++)
                 {
-                    // If line starts with "Enabled"...
                     if (lines[i].Trim().StartsWith("Enabled", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Replace with "Enabled = true" or "Enabled = false"
                         lines[i] = $"Enabled = {newValue.ToString().ToLower()}";
                         break;
                     }
                 }
-
-                // 2) Write updated lines
                 System.IO.File.WriteAllLines(ConfigPath, lines);
             }
             catch
             {
-                // In production, handle errors (e.g., display a message)
+                // handle errors if needed
             }
         }
 
