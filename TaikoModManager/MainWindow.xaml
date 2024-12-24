@@ -1,0 +1,207 @@
+﻿<Window x:Class="TaikoModManager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Taiko Mod Manager for Rhythm Festival" Height="600" Width="820" Background="#1E1E1E" Foreground="White">
+
+    <Grid>
+        <!-- Define Row Heights -->
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Header -->
+            <RowDefinition Height="*"/>
+            <!-- Main Content -->
+            <RowDefinition Height="100"/>
+            <!-- Console Log -->
+        </Grid.RowDefinitions>
+        
+        <!-- Header1 with Tabs -->
+        <StackPanel Orientation="Horizontal" Grid.Row="0" Background="#333333" Height="40" >
+            <Button Content="Plugins"
+                    Margin="5"
+                    Width="100"
+                    Background="#444444"
+                    Foreground="White"
+                    Click="SwitchToPluginsTab"/>
+            <Button Content="BepInEx Config"
+                    Margin="5"
+                    Width="150"
+                    Background="#444444"
+                    Foreground="White"
+                    Click="SwitchToBepInExConfigTab"/>
+        </StackPanel>
+
+        <!-- Header2 with Tabs -->
+        <StackPanel Orientation="Horizontal" Grid.Row="0" Background="#333333" Height="40" HorizontalAlignment="Right" >
+            <Button Content="Open Game Directory"
+                    Margin="5"
+                    Width="150"
+                    Background="#444444"
+                    Foreground="White"
+                    Click="OpenGameDirectoryButton_Click"/>
+            <Button Name="LaunchGameButton"
+                    Content="Launch Game"
+                    Margin="5"
+                    Width="150"
+                    Background="#444444"
+                    Foreground="White"
+                    Click="LaunchGameButton_Click"/>
+        </StackPanel>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Row="1" Margin="5">
+            <!-- Plugins Tab -->
+            <StackPanel Name="PluginsTab" Visibility="Visible" Background="#2E2E2E" Margin="5">
+                <TextBlock Text="Installed Plugins"
+                           FontWeight="Bold"
+                           FontSize="20"
+                           Margin="0,0,0,10"
+                           Foreground="White" />
+
+                <!-- ListView with dark styling for plugin name + description -->
+                <ListView Name="PluginList"
+                          Background="#1E1E1E"
+                          Foreground="White"
+                          Margin="0,0,0,10"
+                          BorderThickness="0"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+
+                    <ListView.Resources>
+                        <!-- Style for individual rows (ListViewItem) -->
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="Background" Value="#1E1E1E"/>
+                            <!-- Normal row background -->
+                            <Setter Property="Foreground" Value="White"/>
+                            <!-- Normal text color -->
+                            <Setter Property="FontSize" Value="14"/>
+                            <Setter Property="Padding" Value="4"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+
+                            <Style.Triggers>
+                                <!-- Hover state -->
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#333333"/>
+                                </Trigger>
+                                <!-- Selected state -->
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter Property="Background" Value="#3E3E3E"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+
+
+                        <!-- Style for the column headers -->
+                        <Style TargetType="GridViewColumnHeader">
+                            <Setter Property="Background" Value="#444444"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="FontWeight" Value="Bold"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="Padding" Value="6,3,6,3"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                        </Style>
+                    </ListView.Resources>
+
+                    <ListView.View>
+                        <GridView AllowsColumnReorder="False">
+
+                            <!-- Column 1: Checkbox for Enabled -->
+                            <GridViewColumn Header="Enabled" Width="80">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding IsPluginEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              IsEnabled="{Binding IsConfigPresent}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>                            
+                            
+                            <!-- Column 2: Plugin Name -->
+                            <GridViewColumn Header="Plugin Name"
+                        DisplayMemberBinding="{Binding Name}"
+                        Width="200" />
+
+                            <!-- Column 3: Description -->
+                            <GridViewColumn Header="Description"
+                        DisplayMemberBinding="{Binding Description}"
+                        Width="500" />
+
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+
+                <!-- Bottom row: Install + Update side by side -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Button Content="Install Plugin"
+                            Width="120"
+                            Background="#444444"
+                            Foreground="White"
+                            Margin="0,0,10,0"
+                            Click="InstallPluginButton_Click" />
+
+                    <Button Content="Update Plugins"
+                            Width="120"
+                            Background="#444444"
+                            Foreground="White"
+                            Click="UpdatePluginsButton_Click" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- BepInEx Config Tab -->
+            <Grid Name="BepInExConfigTab"
+                  Visibility="Collapsed"
+                  Background="#2E2E2E"
+                  Margin="5">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <!-- Header -->
+                    <RowDefinition Height="*"/>
+                    <!-- Scrollable content -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- Save button -->
+                </Grid.RowDefinitions>
+
+                <!-- Header Text -->
+                <TextBlock Text="BepInEx Configuration"
+                           FontWeight="Bold"
+                           FontSize="20"
+                           Margin="10"
+                           Foreground="White"
+                           Grid.Row="0"/>
+
+                <!-- Scrollable Content -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              Margin="10"
+                              Grid.Row="1">
+                    <StackPanel Name="ConfigOptionsPanel"
+                                Background="#1E1E1E"
+                                Margin="0,10,0,0">
+                        <TextBlock Text="BepInEx.cfg not found, have you ran the game to generate the needed files?"
+                                   Foreground="White"
+                                   Margin="0,0,0,10"/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Save Button -->
+                <Button Content="Save Config"
+                        Width="100"
+                        Background="#444444"
+                        Foreground="White"
+                        HorizontalAlignment="Right"
+                        Margin="10"
+                        Grid.Row="2"
+                        Click="SaveConfigChanges" />
+            </Grid>
+        </Grid>
+
+        <!-- Console Log -->
+        <TextBox Name="ConsoleLog"
+                 Grid.Row="2"
+                 Background="#1E1E1E"
+                 Foreground="White"
+                 IsReadOnly="True"
+                 TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Visible"
+                 Margin="10" />
+    </Grid>
+</Window>
