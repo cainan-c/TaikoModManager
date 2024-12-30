@@ -34,7 +34,7 @@ namespace TaikoModManager
         {
             try
             {
-                var (repoName, repoDescription) = await FetchRepoInfo(githubRepoUrl);
+                var (repoName, repoDescription, repoAuthor) = await FetchRepoInfo(githubRepoUrl);
                 var (latestVersion, assetDownloadUrl, assetFileName) = await FetchLatestReleaseInfo(githubRepoUrl);
 
                 string tempFilePath = Path.Combine(Path.GetTempPath(), assetFileName);
@@ -50,11 +50,11 @@ namespace TaikoModManager
                 // .zip or .dll
                 if (tempFilePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 {
-                    ExtractAndInstallZip(tempFilePath, repoName, repoDescription, githubRepoUrl, latestVersion);
+                    ExtractAndInstallZip(tempFilePath, repoName, repoDescription, repoAuthor, githubRepoUrl, latestVersion);
                 }
                 else if (tempFilePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
                 {
-                    InstallDll(tempFilePath, repoName, repoDescription, githubRepoUrl, latestVersion);
+                    InstallDll(tempFilePath, repoName, repoDescription, repoAuthor, githubRepoUrl, latestVersion);
                 }
                 else
                 {
@@ -75,43 +75,40 @@ namespace TaikoModManager
         /// </summary>
         public async Task CheckForUpdates(Action<string> logAction)
         {
-            foreach (string dllFile in Directory.GetFiles(_pluginsPath, "*.dll"))
+            foreach (string pluginFolder in Directory.GetDirectories(_pluginsPath))
             {
-                string dllName = Path.GetFileName(dllFile);
-                string tomlPath = Path.Combine(_dataPath, dllName + ".toml");
-                if (!File.Exists(tomlPath)) continue;
-
-                var tomlString = File.ReadAllText(tomlPath);
-                var tomlModel = Toml.ToModel(tomlString);
-
-                if (!tomlModel.TryGetValue("plugin", out var pluginObj)
-                    || pluginObj is not TomlTable pluginSection)
-                    continue;
-
-                if (!pluginSection.TryGetValue("repo_url", out var repoUrlObj))
-                    continue;
-
-                string repoUrl = repoUrlObj?.ToString() ?? "";
-                if (string.IsNullOrWhiteSpace(repoUrl) || repoUrl == "No Repo URL")
-                    continue;
-
-                string localVersion = "";
-                if (pluginSection.TryGetValue("version", out var versionObj))
-                    localVersion = versionObj?.ToString() ?? "";
-
-                if (string.IsNullOrEmpty(localVersion)) continue;
-
-                try
+                foreach (string dllFile in Directory.GetFiles(pluginFolder, "*.dll", SearchOption.TopDirectoryOnly))
                 {
-                    var (latestVersion, _, _) = await FetchLatestReleaseInfo(repoUrl);
-                    if (!string.IsNullOrEmpty(latestVersion) && latestVersion != localVersion)
+                    string dllName = Path.GetFileName(dllFile);
+                    string tomlPath = Path.Combine(_dataPath, dllName + ".toml");
+                    if (!File.Exists(tomlPath)) continue;
+
+                    var tomlString = File.ReadAllText(tomlPath);
+                    var tomlModel = Toml.ToModel(tomlString);
+
+                    if (!tomlModel.TryGetValue("plugin", out var pluginObj) || pluginObj is not TomlTable pluginSection)
+                        continue;
+
+                    if (!pluginSection.TryGetValue("repo_url", out var repoUrlObj)) continue;
+                    string repoUrl = repoUrlObj?.ToString() ?? "";
+                    if (string.IsNullOrWhiteSpace(repoUrl) || repoUrl == "No Repo URL")
+                        continue;
+
+                    string localVersion = pluginSection.TryGetValue("version", out var versionObj) ? versionObj?.ToString() ?? "" : "";
+                    if (string.IsNullOrEmpty(localVersion)) continue;
+
+                    try
                     {
-                        logAction?.Invoke($"Plugin '{dllName}' has an update! Local: {localVersion}, Latest: {latestVersion}");
+                        var (latestVersion, _, _) = await FetchLatestReleaseInfo(repoUrl);
+                        if (!string.IsNullOrEmpty(latestVersion) && latestVersion != localVersion)
+                        {
+                            logAction?.Invoke($"Plugin '{dllName}' has an update! Local: {localVersion}, Latest: {latestVersion}");
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    logAction?.Invoke($"CheckForUpdates error on '{dllName}': {ex.Message}");
+                    catch (Exception ex)
+                    {
+                        logAction?.Invoke($"CheckForUpdates error on '{dllName}': {ex.Message}");
+                    }
                 }
             }
         }
@@ -125,66 +122,69 @@ namespace TaikoModManager
             if (!Directory.Exists(_pluginsPath))
                 return results;
 
-            // If you need subfolders, change SearchOption to AllDirectories
-            foreach (string dllPath in Directory.GetFiles(_pluginsPath, "*.dll", SearchOption.TopDirectoryOnly))
+            foreach (string pluginFolder in Directory.GetDirectories(_pluginsPath))
             {
-                var info = new PluginInfo();
-                string dllName = Path.GetFileName(dllPath);
-                info.DllName = dllName;
-                info.Name = dllName;    // fallback
-                info.Description = "";
-                info.RepoUrl = "No Repo URL"; // fallback
-
-                // check data/dll.toml
-                string tomlPath = Path.Combine(_dataPath, dllName + ".toml");
-                if (File.Exists(tomlPath))
+                foreach (string dllPath in Directory.GetFiles(pluginFolder, "*.dll", SearchOption.TopDirectoryOnly))
                 {
-                    var tomlString = File.ReadAllText(tomlPath);
-                    var tomlModel = Toml.ToModel(tomlString);
+                    var info = new PluginInfo();
+                    string dllName = Path.GetFileName(dllPath);
+                    info.DllName = dllName;
+                    info.Name = dllName; // fallback
+                    info.Description = "";
+                    info.RepoUrl = "No Repo URL"; // fallback
 
-                    if (tomlModel.TryGetValue("plugin", out var pluginObj) && pluginObj is TomlTable pluginSec)
+                    string tomlPath = Path.Combine(_dataPath, dllName + ".toml");
+                    if (File.Exists(tomlPath))
                     {
-                        if (pluginSec.TryGetValue("name", out var nmObj))
-                            info.Name = nmObj?.ToString() ?? dllName;
-                        if (pluginSec.TryGetValue("description", out var descObj))
-                            info.Description = descObj?.ToString() ?? "";
-                        if (pluginSec.TryGetValue("repo_url", out var repoUrlObj))
-                            info.RepoUrl = repoUrlObj?.ToString() ?? "No Repo URL";
-                    }
-                }
+                        var tomlString = File.ReadAllText(tomlPath);
+                        var tomlModel = Toml.ToModel(tomlString);
 
-                // BepInEx/config check
-                string baseName = Path.GetFileNameWithoutExtension(dllName); // e.g. "RF.TekaTeka"
-                string possibleConfig = Path.Combine(_gamePath, "BepInEx", "config", baseName + ".cfg");
-                if (File.Exists(possibleConfig))
-                {
-                    info.IsConfigPresent = true;
-                    info.ConfigPath = possibleConfig;
-                    try
-                    {
-                        var lines = File.ReadAllLines(possibleConfig);
-                        foreach (var line in lines)
+                        if (tomlModel.TryGetValue("plugin", out var pluginObj) && pluginObj is TomlTable pluginSec)
                         {
-                            if (line.Trim().StartsWith("Enabled", StringComparison.OrdinalIgnoreCase))
-                            {
-                                if (line.ToLower().Contains("true")) info.IsPluginEnabled = true;
-                                else info.IsPluginEnabled = false;
-                                break;
-                            }
+                            if (pluginSec.TryGetValue("name", out var nmObj))
+                                info.Name = nmObj?.ToString() ?? dllName;
+                            if (pluginSec.TryGetValue("description", out var descObj))
+                                info.Description = descObj?.ToString() ?? "";
+                            if (pluginSec.TryGetValue("repo_url", out var repoUrlObj))
+                                info.RepoUrl = repoUrlObj?.ToString() ?? "No Repo URL";
+                            if (pluginSec.TryGetValue("version", out var versionObj))
+                                info.Version = versionObj?.ToString() ?? "Unknown Version";
+                            if (pluginSec.TryGetValue("author", out var authorObj))
+                                info.Author = authorObj?.ToString() ?? "Unknown Author";
                         }
                     }
-                    catch
-                    {
-                        // ignore config read errors
-                    }
-                }
-                else
-                {
-                    info.IsConfigPresent = false;
-                    info.IsPluginEnabled = false;
-                }
 
-                results.Add(info);
+
+                    string baseName = Path.GetFileNameWithoutExtension(dllName);
+                    string possibleConfig = Path.Combine(_gamePath, "BepInEx", "config", baseName + ".cfg");
+                    if (File.Exists(possibleConfig))
+                    {
+                        info.IsConfigPresent = true;
+                        info.ConfigPath = possibleConfig;
+                        try
+                        {
+                            foreach (var line in File.ReadAllLines(possibleConfig))
+                            {
+                                if (line.Trim().StartsWith("Enabled", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    info.IsPluginEnabled = line.ToLower().Contains("true");
+                                    break;
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // Ignore errors
+                        }
+                    }
+                    else
+                    {
+                        info.IsConfigPresent = false;
+                        info.IsPluginEnabled = false;
+                    }
+
+                    results.Add(info);
+                }
             }
             return results;
         }
@@ -192,9 +192,9 @@ namespace TaikoModManager
         #region Internals
 
         /// <summary>
-        /// Retrieve repository info (name, description) from the GitHub API.
+        /// Retrieve repository info (name, description, author) from the GitHub API.
         /// </summary>
-        private async Task<(string repoName, string repoDescription)> FetchRepoInfo(string githubRepoUrl)
+        private async Task<(string repoName, string repoDescription, string repoAuthor)> FetchRepoInfo(string githubRepoUrl)
         {
             var (owner, repo) = ParseOwnerAndRepo(githubRepoUrl);
             string apiUrl = $"https://api.github.com/repos/{owner}/{repo}";
@@ -204,7 +204,8 @@ namespace TaikoModManager
             using var doc = JsonDocument.Parse(resp);
             string name = doc.RootElement.GetProperty("name").GetString();
             string desc = doc.RootElement.GetProperty("description").GetString();
-            return (name ?? "Unknown", desc ?? "No description provided");
+            string author = doc.RootElement.GetProperty("owner").GetProperty("login").GetString();
+            return (name ?? "Unknown", desc ?? "No description provided", author ?? "Unknown Author");
         }
 
         /// <summary>
@@ -240,7 +241,7 @@ namespace TaikoModManager
         /// <summary>
         /// Extract a .zip, then copy any .dll files into BepInEx\plugins and generate metadata files.
         /// </summary>
-        private void ExtractAndInstallZip(string zipFilePath, string repoName, string repoDesc, string repoUrl, string version)
+        private void ExtractAndInstallZip(string zipFilePath, string repoName, string repoDesc, string repoAuthor, string repoUrl, string version)
         {
             string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempDir);
@@ -249,7 +250,7 @@ namespace TaikoModManager
                 ZipFile.ExtractToDirectory(zipFilePath, tempDir);
                 foreach (string dll in Directory.GetFiles(tempDir, "*.dll", SearchOption.AllDirectories))
                 {
-                    InstallDll(dll, repoName, repoDesc, repoUrl, version);
+                    InstallDll(dll, repoName, repoDesc, repoAuthor, repoUrl, version);
                 }
             }
             finally
@@ -262,10 +263,13 @@ namespace TaikoModManager
         /// <summary>
         /// Copies a single .dll to BepInEx\plugins, then creates/updates its .toml metadata file.
         /// </summary>
-        private void InstallDll(string dllPath, string repoName, string repoDesc, string repoUrl, string version)
+        private void InstallDll(string dllPath, string repoName, string repoDesc, string repoAuthor, string repoUrl, string version)
         {
             string dllName = Path.GetFileName(dllPath);
-            string dest = Path.Combine(_pluginsPath, dllName);
+            string pluginFolder = Path.Combine(_pluginsPath, Path.GetFileNameWithoutExtension(dllName)); // plugins/[dll file name]
+            Directory.CreateDirectory(pluginFolder);
+
+            string dest = Path.Combine(pluginFolder, dllName); // plugins/[dll file name]/[dll file]
             File.Copy(dllPath, dest, overwrite: true);
 
             if (File.Exists(dllPath))
@@ -273,29 +277,25 @@ namespace TaikoModManager
                 try { File.Delete(dllPath); } catch { /* ignore */ }
             }
 
+            // Update or create metadata in the new plugin folder
             string tomlFile = Path.Combine(_dataPath, dllName + ".toml");
             if (!File.Exists(tomlFile))
             {
-                CreateMetadataFile(dest, repoName, repoDesc, repoUrl, version);
-            }
-            else
-            {
-                // (Optional) If the file already exists, you could update version/URL, etc.
+                CreateMetadataFile(dest, repoName, repoDesc, repoAuthor, repoUrl, version);
             }
         }
 
-        private void CreateMetadataFile(string dllFullPath, string pluginName, string pluginDesc, string repoUrl, string version)
+        private void CreateMetadataFile(string dllFullPath, string pluginName, string pluginDesc, string pluginAuthor, string repoUrl, string version)
         {
             string dllName = Path.GetFileName(dllFullPath);
             string tomlFile = Path.Combine(_dataPath, dllName + ".toml");
-            if (File.Exists(tomlFile)) return; // skip if file already exists
-
             var pluginSec = new TomlTable
             {
                 ["name"] = pluginName,
+                ["author"] = pluginAuthor,
                 ["description"] = pluginDesc,
                 ["repo_url"] = repoUrl,
-                ["version"] = version
+                ["version"] = version // Ensure version is recorded
             };
             var meta = new TomlTable { ["plugin"] = pluginSec };
 
@@ -337,39 +337,36 @@ namespace TaikoModManager
         /// </summary>
         public async Task UpdateAllPluginsAsync(Action<string> logAction)
         {
-            string[] tomlFiles = Directory.GetFiles(_dataPath, "*.toml", SearchOption.TopDirectoryOnly);
-            foreach (string f in tomlFiles)
+            foreach (string pluginFolder in Directory.GetDirectories(_pluginsPath))
             {
-                try
+                foreach (string dllFile in Directory.GetFiles(pluginFolder, "*.dll", SearchOption.TopDirectoryOnly))
                 {
-                    var tomlStr = File.ReadAllText(f);
-                    var tomlModel = Toml.ToModel(tomlStr);
+                    string dllName = Path.GetFileName(dllFile);
+                    string tomlPath = Path.Combine(_dataPath, dllName + ".toml");
+                    if (!File.Exists(tomlPath)) continue;
 
-                    if (!tomlModel.TryGetValue("plugin", out var pluginObj)
-                        || pluginObj is not TomlTable pluginSec) continue;
+                    var tomlString = File.ReadAllText(tomlPath);
+                    var tomlModel = Toml.ToModel(tomlString);
+
+                    if (!tomlModel.TryGetValue("plugin", out var pluginObj) || pluginObj is not TomlTable pluginSec)
+                        continue;
 
                     if (!pluginSec.TryGetValue("repo_url", out var repoObj)) continue;
                     string repoUrl = repoObj?.ToString() ?? "";
                     if (string.IsNullOrWhiteSpace(repoUrl) || repoUrl == "No Repo URL") continue;
 
-                    string localVer = "";
-                    if (pluginSec.TryGetValue("version", out var verObj))
-                        localVer = verObj?.ToString() ?? "";
-
+                    string localVer = pluginSec.TryGetValue("version", out var verObj) ? verObj?.ToString() ?? "" : "";
                     var (latestVer, _, _) = await FetchLatestReleaseInfo(repoUrl);
-                    if (string.IsNullOrWhiteSpace(latestVer)
-                        || latestVer.Equals("UnknownVersion", StringComparison.OrdinalIgnoreCase)) continue;
-
-                    if (!latestVer.Equals(localVer, StringComparison.OrdinalIgnoreCase))
+                    if (!string.IsNullOrWhiteSpace(latestVer) && latestVer != localVer)
                     {
-                        logAction($"Updating plugin from {localVer} to {latestVer} for repo: {repoUrl}");
+                        logAction($"Updating plugin '{dllName}' from {localVer} to {latestVer}.");
                         await InstallPlugin(repoUrl);
-                        logAction($"Updated plugin (repo: {repoUrl}) to version {latestVer}.");
+
+                        // Update version in TOML
+                        pluginSec["version"] = latestVer;
+                        File.WriteAllText(tomlPath, Toml.FromModel(new TomlTable { ["plugin"] = pluginSec }));
+                        logAction($"Updated plugin '{dllName}' to version {latestVer}.");
                     }
-                }
-                catch (Exception ex)
-                {
-                    logAction($"Error updating plugin via {f}: {ex.Message}");
                 }
             }
             logAction("Plugin update check complete.");

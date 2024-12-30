@@ -17,7 +17,7 @@ namespace TaikoModManager
         public ModsTab(string gamePath)
         {
             _gamePath = gamePath;
-            _tekaTekaDllPath = Path.Combine(gamePath, "BepInEx", "plugins", "RF.TekaTeka.dll");
+            _tekaTekaDllPath = Path.Combine(gamePath, "BepInEx", "plugins", "RF.TekaTeka", "RF.TekaTeka.dll");
             _tekaSongsPath = Path.Combine(gamePath, "TekaSongs");
         }
 

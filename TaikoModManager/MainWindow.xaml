@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Taiko Mod Manager for Rhythm Festival"
         Height="600"
-        Width="820"
+        Width="850"
         Background="#1E1E1E"
         Foreground="White">
 
@@ -70,7 +70,7 @@
                         Visibility="Collapsed"
                         Background="#2E2E2E"
                         Margin="5">
-                <TextBlock Text="TekaTeka Mods"
+                <TextBlock Text=" TekaTeka Mods"
                            FontWeight="Bold"
                            FontSize="20"
                            Margin="0,0,0,10"
@@ -115,7 +115,7 @@
                     <ListView.View>
                         <GridView AllowsColumnReorder="False">
                             <!-- 1: Enabled checkbox -->
-                            <GridViewColumn Header="Enabled" Width="80">
+                            <GridViewColumn Header="Enabled" Width="60">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <CheckBox IsChecked="{Binding IsModEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -134,7 +134,7 @@
                             <!-- 3: Version -->
                             <GridViewColumn Header="Version"
                                             DisplayMemberBinding="{Binding Version}"
-                                            Width="100" />
+                                            Width="60" />
 
                             <!-- 4: Description -->
                             <GridViewColumn Header="Description"
@@ -157,6 +157,7 @@
                             Width="150"
                             Background="#444444"
                             Foreground="White"
+                            Margin="0,0,10,0"
                             Click="OpenModsFolderButton_Click" />
                 </StackPanel>
             </StackPanel>
@@ -167,7 +168,7 @@
                         Visibility="Visible"
                         Background="#2E2E2E"
                         Margin="5">
-                <TextBlock Text="Installed Plugins"
+                <TextBlock Text=" Installed Plugins"
                            FontWeight="Bold"
                            FontSize="20"
                            Margin="0,0,0,10"
@@ -212,7 +213,7 @@
                     <ListView.View>
                         <GridView AllowsColumnReorder="False">
                             <!-- Column 1: Checkbox for Enabled -->
-                            <GridViewColumn Header="Enabled" Width="80">
+                            <GridViewColumn Header="Enabled" Width="60">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <CheckBox IsChecked="{Binding IsPluginEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -228,10 +229,20 @@
                                             DisplayMemberBinding="{Binding Name}"
                                             Width="200" />
 
-                            <!-- Column 3: Description -->
+                            <!-- Column 3: Author -->
+                            <GridViewColumn Header="Author"
+                                            DisplayMemberBinding="{Binding Author}"
+                                            Width="100" />
+                            
+                            <!-- Column 4: Version -->
+                            <GridViewColumn Header="Version"
+                                            DisplayMemberBinding="{Binding Version}"
+                                            Width="65" />                            
+                            
+                            <!-- Column 5: Description -->
                             <GridViewColumn Header="Description"
                                             DisplayMemberBinding="{Binding Description}"
-                                            Width="500" />
+                                            Width="355" />
                         </GridView>
                     </ListView.View>
                 </ListView>
@@ -259,6 +270,7 @@
                             Width="120"
                             Background="#444444"
                             Foreground="White"
+                            Margin="0,0,10,0"
                             Click="UpdatePluginsButton_Click" />
                 </StackPanel>
             </StackPanel>

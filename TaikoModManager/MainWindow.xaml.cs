@@ -320,13 +320,14 @@ namespace TaikoModManager
         private void LoadPluginsToList()
         {
             if (_pluginsTab == null) return;
+
             var plugins = _pluginsTab.LoadPluginsDetailed();
             PluginList.ItemsSource = plugins;
 
-            // Hook container generation so we can set up context menus
             PluginList.ItemContainerGenerator.StatusChanged -= PluginList_StatusChanged;
             PluginList.ItemContainerGenerator.StatusChanged += PluginList_StatusChanged;
         }
+
 
         private void PluginList_StatusChanged(object sender, EventArgs e)
         {

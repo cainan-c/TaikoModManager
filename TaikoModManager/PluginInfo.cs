@@ -8,6 +8,8 @@ namespace TaikoModManager
     {
         private bool _isPluginEnabled;
         private bool _isConfigPresent;
+        private string _version;
+        private string _author;
 
         public string DllName { get; set; }
         public string Name { get; set; }
@@ -27,8 +29,26 @@ namespace TaikoModManager
                 OnPropertyChanged();
             }
         }
-        // Helper for debugging if needed
-        public string GetRepoUrl() => RepoUrl;
+
+        public string Version
+        {
+            get => _version;
+            set
+            {
+                _version = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string Author
+        {
+            get => _author;
+            set
+            {
+                _author = value;
+                OnPropertyChanged();
+            }
+        }
 
         public bool IsConfigPresent
         {
