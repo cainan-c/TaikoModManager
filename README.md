@@ -2,6 +2,8 @@
 
 Taiko Mod Manager is a tool designed to enhance your experience with the Steam Release of *Taiko no Tatsujin: Rhythm Festival*. It provides features for managing mods, plugins, and configurations, with integration for BepInEx.
 
+![A screenshot of Taiko Mod Manager, showing the plugin manager screen.](https://i.imgur.com/XLr5Fsl.png "Main Window")
+
 ## Features
 
 - **Auto-Detection**: Automatically detects the game installation path.
