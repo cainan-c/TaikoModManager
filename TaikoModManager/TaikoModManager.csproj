@@ -2,11 +2,32 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Platforms>AnyCPU;x64;x86</Platforms>
+    <Platforms>x64</Platforms>
     <UseWPF>True</UseWPF>
+    <Title>Taiko Mod Manager</Title>
+    <Company></Company>
+    <Description>Taiko Mod Manager for Taiko no Tatsujin: Rhythm Festival</Description>
+    <Copyright>cainan__c 2024-25</Copyright>
+    <PackageProjectUrl>https://github.com/cainan-c/TaikoModManager</PackageProjectUrl>
+    <PackageIcon>app-icon.png</PackageIcon>
+    <RepositoryUrl>https://github.com/cainan-c/TaikoModManager</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryType>git</RepositoryType>
+    <NeutralLanguage>en-GB</NeutralLanguage>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+	<PublishDir>$(MSBuildProjectDirectory)\bin\Release\TaikoModManager-$(Version)\</PublishDir>
+    <ApplicationIcon>res\app-icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <DebugType>none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,7 +35,25 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Tomlyn" Version="0.18.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="res\app-icon.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>

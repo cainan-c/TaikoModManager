@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading.Tasks;
 using System.Windows;    // For MessageBox, if desired
-using Tomlyn;           // For Toml parsing (adjust if you have a different TOML library)
+using Tomlyn;           // For Toml parsing
 using Tomlyn.Model;
 
 namespace TaikoModManager
@@ -88,21 +87,19 @@ namespace TaikoModManager
             System.Diagnostics.Process.Start("explorer.exe", normalizedTekaSongsPath);
         }
 
-
         /// <summary>
         /// Parses a "config.toml" for:
-        /// enabled = true/false
-        /// name = "..."
-        /// version = "..."
-        /// description = "..."
+        /// enabled      = true/false
+        /// name         = "..."
+        /// version      = "..."
+        /// description  = "..."
+        /// author       = "..."
         /// </summary>
         private TekaTekaModInfo ParseModConfig(string configPath)
         {
             var modInfo = new TekaTekaModInfo
             {
                 ConfigPath = configPath,
-                // If TekaTeka is installed, we can enable/disable
-                // but you can fine-tune this logic
                 CanEnable = IsTekaTekaInstalled()
             };
 
@@ -127,10 +124,15 @@ namespace TaikoModManager
                 {
                     modInfo.Description = descObj?.ToString() ?? "";
                 }
+                // NEW: author field
+                if (tomlModel.TryGetValue("author", out var authorObj))
+                {
+                    modInfo.Author = authorObj?.ToString() ?? "";
+                }
             }
             catch
             {
-                // If there's a parse error, we fallback
+                // If there's a parse error, fallback
                 modInfo.Name = Path.GetFileNameWithoutExtension(configPath);
             }
 
@@ -139,7 +141,7 @@ namespace TaikoModManager
     }
 
     /// <summary>
-    /// Data model for TekaTeka mods, similar to PluginInfo for BepInEx plugins.
+    /// Data model for TekaTeka mods
     /// </summary>
     public class TekaTekaModInfo : System.ComponentModel.INotifyPropertyChanged
     {
@@ -149,6 +151,9 @@ namespace TaikoModManager
         public string Name { get; set; }
         public string Version { get; set; }
         public string Description { get; set; }
+
+        // NEW: the author property
+        public string Author { get; set; }
 
         // If user can enable/disable this mod
         public bool CanEnable { get; set; }

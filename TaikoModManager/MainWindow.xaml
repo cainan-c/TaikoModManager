@@ -3,40 +3,78 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Taiko Mod Manager for Rhythm Festival"
         Height="600"
-        Width="850"
+        Width="1050"
         Background="#1E1E1E"
         Foreground="White">
+    <Window.Resources>
+
+        <Style x:Key="MetroGridViewColumnHeaderStyle" TargetType="GridViewColumnHeader">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Background" Value="#444444"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Padding" Value="8,4,8,4"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridViewColumnHeader">
+                        <Border Background="{TemplateBinding Background}" 
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter VerticalAlignment="Center"
+                                              HorizontalAlignment="Left"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MonoListViewItemStyle" TargetType="ListViewItem">
+            <Setter Property="Background" Value="#1E1E1E"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Padding" Value="4"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#3E3E3E"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#3E3E3E"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+    </Window.Resources>
 
     <Grid>
-        <!-- Define Row Heights -->
+        <!-- ======== LAYOUT ROWS ======== -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <!-- Header -->
             <RowDefinition Height="*"/>
-            <!-- Main Content -->
             <RowDefinition Height="100"/>
-            <!-- Console Log -->
         </Grid.RowDefinitions>
 
-        <!-- Header1 with Tabs -->
-        <StackPanel Orientation="Horizontal" Grid.Row="0" Background="#333333" Height="40" >
-            <!-- TekaTeka Mods first -->
+        <!-- ========== TOP BAR (Row 0) ========== -->
+        <StackPanel Orientation="Horizontal"
+                    Grid.Row="0"
+                    Background="#333333"
+                    Height="40">
             <Button Content="TekaTeka Mods"
                     Margin="5"
                     Width="130"
                     Background="#444444"
                     Foreground="White"
                     Click="SwitchToTekaTekaModsTab"/>
-
-            <!-- Then Plugins -->
             <Button Content="Plugins"
                     Margin="5"
                     Width="100"
                     Background="#444444"
                     Foreground="White"
                     Click="SwitchToPluginsTab"/>
-
-            <!-- Then BepInEx Config -->
             <Button Content="BepInEx Config"
                     Margin="5"
                     Width="150"
@@ -45,8 +83,12 @@
                     Click="SwitchToBepInExConfigTab"/>
         </StackPanel>
 
-        <!-- Header2 with Tabs (Right side) -->
-        <StackPanel Orientation="Horizontal" Grid.Row="0" Background="#333333" Height="40" HorizontalAlignment="Right" >
+        <!-- RIGHT SIDE TOP BAR -->
+        <StackPanel Orientation="Horizontal"
+                    Grid.Row="0"
+                    Background="#333333"
+                    Height="40"
+                    HorizontalAlignment="Right">
             <Button Content="Open Game Directory"
                     Margin="5"
                     Width="150"
@@ -62,255 +104,319 @@
                     Click="LaunchGameButton_Click"/>
         </StackPanel>
 
-        <!-- Main Content Area -->
+        <!-- ========== MAIN CONTENT (Row 1) ========== -->
         <Grid Grid.Row="1" Margin="5">
 
-            <!-- TekaTeka Mods Tab -->
-            <StackPanel Name="TekaTekaModsTab"
-                        Visibility="Collapsed"
-                        Background="#2E2E2E"
-                        Margin="5">
-                <TextBlock Text=" TekaTeka Mods"
-                           FontWeight="Bold"
-                           FontSize="20"
-                           Margin="0,0,0,10"
-                           Foreground="White" />
+            <!-- ~~~ TekaTeka Mods Tab ~~~ -->
+            <Grid Name="TekaTekaModsTab"
+                  Visibility="Collapsed"
+                  Background="#2E2E2E"
+                  Margin="5">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-                <!-- ListView for TekaTeka mods -->
-                <ListView Name="TekaTekaModsList"
-                          Background="#1E1E1E"
-                          Foreground="White"
-                          Margin="0,0,0,10"
-                          BorderThickness="0"
-                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <!-- Row 0: two columns -> left list (with scroll if needed), right metadata (with scroll if needed) -->
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="300"/>
+                    </Grid.ColumnDefinitions>
 
-                    <ListView.Resources>
-                        <Style TargetType="ListViewItem">
-                            <Setter Property="Background" Value="#1E1E1E"/>
-                            <Setter Property="Foreground" Value="White"/>
-                            <Setter Property="FontSize" Value="14"/>
-                            <Setter Property="Padding" Value="4"/>
-                            <Setter Property="BorderThickness" Value="0"/>
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#333333"/>
-                                </Trigger>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter Property="Background" Value="#3E3E3E"/>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
+                    <!-- LEFT: Wrap in a ScrollViewer if you want the entire left region to scroll. -->
+                    <ScrollViewer Grid.Column="0" Margin="10,0,10,0" VerticalScrollBarVisibility="Auto">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
 
-                        <Style TargetType="GridViewColumnHeader">
-                            <Setter Property="Background" Value="#444444"/>
-                            <Setter Property="Foreground" Value="White"/>
-                            <Setter Property="FontWeight" Value="Bold"/>
-                            <Setter Property="BorderThickness" Value="0"/>
-                            <Setter Property="Padding" Value="6,3,6,3"/>
-                            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-                        </Style>
-                    </ListView.Resources>
+                            <StackPanel Grid.Row="0">
+                                <TextBlock Text="TekaTeka Mods"
+                                           FontWeight="Bold"
+                                           FontSize="20"
+                                           Margin="0,5,0,10"
+                                           Foreground="White" />
 
-                    <ListView.View>
-                        <GridView AllowsColumnReorder="False">
-                            <!-- 1: Enabled checkbox -->
-                            <GridViewColumn Header="Enabled" Width="60">
-                                <GridViewColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <CheckBox IsChecked="{Binding IsModEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                  IsEnabled="{Binding CanEnable}"
-                                                  HorizontalAlignment="Center"
-                                                  VerticalAlignment="Center"/>
-                                    </DataTemplate>
-                                </GridViewColumn.CellTemplate>
-                            </GridViewColumn>
+                                <ListView Name="TekaTekaModsList"
+                                          Background="#1E1E1E"
+                                          Foreground="White"
+                                          Padding="8"
+                                          Margin="0,0,0,10"
+                                          BorderThickness="0"
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <!-- Flattened header + mono highlight style usage -->
+                                    <ListView.Resources>
+                                        <!-- Flatten column header -->
+                                        <Style TargetType="GridViewColumnHeader"
+                                               BasedOn="{StaticResource MetroGridViewColumnHeaderStyle}" />
+                                    </ListView.Resources>
 
-                            <!-- 2: Name -->
-                            <GridViewColumn Header="Name"
-                                            DisplayMemberBinding="{Binding Name}"
-                                            Width="200" />
+                                    <!-- Apply our "MonoListViewItemStyle" to each item -->
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem" 
+                                               BasedOn="{StaticResource MonoListViewItemStyle}" />
+                                    </ListView.ItemContainerStyle>
 
-                            <!-- 3: Version -->
-                            <GridViewColumn Header="Version"
-                                            DisplayMemberBinding="{Binding Version}"
-                                            Width="60" />
+                                    <ListView.View>
+                                        <GridView AllowsColumnReorder="False">
+                                            <GridViewColumn Header="Enabled" Width="60">
+                                                <GridViewColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <CheckBox IsChecked="{Binding IsModEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                  HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center"/>
+                                                    </DataTemplate>
+                                                </GridViewColumn.CellTemplate>
+                                            </GridViewColumn>
+                                            <GridViewColumn Header="Name"
+                                                            DisplayMemberBinding="{Binding Name}"
+                                                            Width="250"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+                            </StackPanel>
 
-                            <!-- 4: Description -->
-                            <GridViewColumn Header="Description"
-                                            DisplayMemberBinding="{Binding Description}"
-                                            Width="350" />
-                        </GridView>
-                    </ListView.View>
-                </ListView>
+                            <!-- Big black area (optional) -->
+                            <Border Grid.Row="1"
+                                    Background="#1E1E1E"
+                                    BorderThickness="0"
+                                    Margin="0"/>
+                        </Grid>
+                    </ScrollViewer>
 
-                <!-- Mods bottom row: Create + Open Mods Folder -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <!-- RIGHT: Another ScrollViewer for metadata, in case it's tall. -->
+                    <ScrollViewer Grid.Column="1" Margin="0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel DataContext="{Binding SelectedItem, ElementName=TekaTekaModsList}"
+                                    Background="#2E2E2E">
+                            <TextBlock Text="Version:"
+                                       Margin="0,5,0,0"
+                                       FontWeight="Bold"
+                                       Foreground="White"/>
+                            <TextBlock Text="{Binding Version}"
+                                       Margin="10,0,0,5"
+                                       Foreground="White"/>
+
+                            <TextBlock Text="Author:"
+                                       Margin="0,5,0,0"
+                                       FontWeight="Bold"
+                                       Foreground="White"/>
+                            <TextBlock Text="{Binding Author}"
+                                       Margin="10,0,0,5"
+                                       Foreground="White"/>
+
+                            <TextBlock Text="Description:"
+                                       Margin="0,5,0,5"
+                                       FontWeight="Bold"
+                                       Foreground="White"/>
+                            <TextBox Text="{Binding Description}"
+                                     Background="#1E1E1E"
+                                     Foreground="White"
+                                     BorderThickness="1"
+                                     BorderBrush="#444444"
+                                     AcceptsReturn="True"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap"
+                                     Margin="0,0,10,0"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Height="100"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- Row 1: Bottom Buttons -->
+                <StackPanel Grid.Row="1"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Margin="0,10,10,10">
                     <Button Content="Create Mod"
                             Width="100"
                             Background="#444444"
                             Foreground="White"
                             Margin="0,0,10,0"
-                            Click="CreateModButton_Click" />
-
+                            Click="CreateModButton_Click"/>
                     <Button Content="Open Mods Folder"
                             Width="150"
                             Background="#444444"
                             Foreground="White"
-                            Margin="0,0,10,0"
-                            Click="OpenModsFolderButton_Click" />
+                            Click="OpenModsFolderButton_Click"/>
                 </StackPanel>
-            </StackPanel>
+            </Grid>
 
+            <!-- ~~~ Plugins Tab ~~~ -->
+            <Grid Name="PluginsTab"
+                  Visibility="Visible"
+                  Background="#2E2E2E"
+                  Margin="5">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-            <!-- Plugins Tab -->
-            <StackPanel Name="PluginsTab"
-                        Visibility="Visible"
-                        Background="#2E2E2E"
-                        Margin="5">
-                <TextBlock Text=" Installed Plugins"
-                           FontWeight="Bold"
-                           FontSize="20"
-                           Margin="0,0,0,10"
-                           Foreground="White" />
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="300"/>
+                    </Grid.ColumnDefinitions>
 
-                <!-- ListView for Plugins -->
-                <ListView Name="PluginList"
-                          Background="#1E1E1E"
-                          Foreground="White"
-                          Margin="0,0,0,10"
-                          BorderThickness="0"
-                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <!-- LEFT: ScrollViewer for the plugin list area. -->
+                    <ScrollViewer Grid.Column="0"
+                                  Margin="10,0,10,0"
+                                  VerticalScrollBarVisibility="Auto">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
 
-                    <ListView.Resources>
-                        <Style TargetType="ListViewItem">
-                            <Setter Property="Background" Value="#1E1E1E"/>
-                            <Setter Property="Foreground" Value="White"/>
-                            <Setter Property="FontSize" Value="14"/>
-                            <Setter Property="Padding" Value="4"/>
-                            <Setter Property="BorderThickness" Value="0"/>
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#333333"/>
-                                </Trigger>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter Property="Background" Value="#3E3E3E"/>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
+                            <StackPanel Grid.Row="0">
+                                <TextBlock Text="Installed Plugins"
+                                           FontWeight="Bold"
+                                           FontSize="20"
+                                           Margin="0,5,0,10"
+                                           Foreground="White"/>
 
-                        <Style TargetType="GridViewColumnHeader">
-                            <Setter Property="Background" Value="#444444"/>
-                            <Setter Property="Foreground" Value="White"/>
-                            <Setter Property="FontWeight" Value="Bold"/>
-                            <Setter Property="BorderThickness" Value="0"/>
-                            <Setter Property="Padding" Value="6,3,6,3"/>
-                            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-                        </Style>
-                    </ListView.Resources>
+                                <ListView Name="PluginList"
+                                          Background="#1E1E1E"
+                                          Foreground="White"
+                                          Padding="8"
+                                          Margin="0,0,0,10"
+                                          BorderThickness="0"
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <ListView.Resources>
+                                        <Style TargetType="GridViewColumnHeader"
+                                               BasedOn="{StaticResource MetroGridViewColumnHeaderStyle}"/>
+                                    </ListView.Resources>
 
-                    <ListView.View>
-                        <GridView AllowsColumnReorder="False">
-                            <!-- Column 1: Checkbox for Enabled -->
-                            <GridViewColumn Header="Enabled" Width="60">
-                                <GridViewColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <CheckBox IsChecked="{Binding IsPluginEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                  IsEnabled="{Binding IsConfigPresent}"
-                                                  HorizontalAlignment="Center"
-                                                  VerticalAlignment="Center"/>
-                                    </DataTemplate>
-                                </GridViewColumn.CellTemplate>
-                            </GridViewColumn>
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem"
+                                               BasedOn="{StaticResource MonoListViewItemStyle}"/>
+                                    </ListView.ItemContainerStyle>
 
-                            <!-- Column 2: Plugin Name -->
-                            <GridViewColumn Header="Plugin Name"
-                                            DisplayMemberBinding="{Binding Name}"
-                                            Width="200" />
+                                    <ListView.View>
+                                        <GridView AllowsColumnReorder="False">
+                                            <GridViewColumn Header="Enabled" Width="60">
+                                                <GridViewColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <CheckBox IsChecked="{Binding IsPluginEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                  HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center"/>
+                                                    </DataTemplate>
+                                                </GridViewColumn.CellTemplate>
+                                            </GridViewColumn>
+                                            <GridViewColumn Header="Plugin Name"
+                                                            DisplayMemberBinding="{Binding Name}"
+                                                            Width="250"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+                            </StackPanel>
 
-                            <!-- Column 3: Author -->
-                            <GridViewColumn Header="Author"
-                                            DisplayMemberBinding="{Binding Author}"
-                                            Width="100" />
-                            
-                            <!-- Column 4: Version -->
-                            <GridViewColumn Header="Version"
-                                            DisplayMemberBinding="{Binding Version}"
-                                            Width="65" />                            
-                            
-                            <!-- Column 5: Description -->
-                            <GridViewColumn Header="Description"
-                                            DisplayMemberBinding="{Binding Description}"
-                                            Width="355" />
-                        </GridView>
-                    </ListView.View>
-                </ListView>
+                            <!-- big black area -->
+                            <Border Grid.Row="1"
+                                    Background="#1E1E1E"
+                                    BorderThickness="0"
+                                    Margin="0"/>
+                        </Grid>
+                    </ScrollViewer>
 
-                <!-- Bottom row: Open Plugins Folder + Install + Update side by side -->
-                <StackPanel Orientation="Horizontal"
+                    <!-- RIGHT: also scroll if the metadata is large -->
+                    <ScrollViewer Grid.Column="1"
+                                  Margin="0"
+                                  VerticalScrollBarVisibility="Auto">
+                        <StackPanel DataContext="{Binding SelectedItem, ElementName=PluginList}"
+                                    Background="#2E2E2E">
+                            <TextBlock Text="Version:"
+                                       Margin="0,5,0,0"
+                                       FontWeight="Bold"
+                                       Foreground="White"/>
+                            <TextBlock Text="{Binding Version}"
+                                       Margin="10,0,0,5"
+                                       Foreground="White"/>
+
+                            <TextBlock Text="Author:"
+                                       Margin="0,5,0,0"
+                                       FontWeight="Bold"
+                                       Foreground="White"/>
+                            <TextBlock Text="{Binding Author}"
+                                       Margin="10,0,0,5"
+                                       Foreground="White"/>
+
+                            <TextBlock Text="Description:"
+                                       Margin="0,5,0,5"
+                                       FontWeight="Bold"
+                                       Foreground="White"/>
+                            <TextBox Text="{Binding Description}"
+                                     Background="#1E1E1E"
+                                     Foreground="White"
+                                     BorderThickness="1"
+                                     BorderBrush="#444444"
+                                     AcceptsReturn="True"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Margin="0,0,10,0"
+                                     Height="100"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <StackPanel Grid.Row="1"
+                            Orientation="Horizontal"
                             HorizontalAlignment="Right"
-                            Margin="0,10,0,0">
-
+                            Margin="0,10,10,10">
                     <Button Content="Open Plugins Folder"
                             Width="130"
                             Background="#444444"
                             Foreground="White"
                             Margin="0,0,10,0"
-                            Click="OpenPluginsFolderButton_Click" />
-
+                            Click="OpenPluginsFolderButton_Click"/>
                     <Button Content="Install Plugin"
                             Width="120"
                             Background="#444444"
                             Foreground="White"
                             Margin="0,0,10,0"
-                            Click="InstallPluginButton_Click" />
-
+                            Click="InstallPluginButton_Click"/>
                     <Button Content="Update Plugins"
                             Width="120"
                             Background="#444444"
                             Foreground="White"
-                            Margin="0,0,10,0"
-                            Click="UpdatePluginsButton_Click" />
+                            Click="UpdatePluginsButton_Click"/>
                 </StackPanel>
-            </StackPanel>
-
+            </Grid>
+            
             <!-- BepInEx Config Tab -->
             <Grid Name="BepInExConfigTab"
                   Visibility="Collapsed"
                   Background="#2E2E2E"
                   Margin="5">
+
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
-                    <!-- Header -->
                     <RowDefinition Height="*"/>
-                    <!-- Scrollable content -->
                     <RowDefinition Height="Auto"/>
-                    <!-- Save button -->
                 </Grid.RowDefinitions>
 
-                <!-- Header Text -->
                 <TextBlock Text="BepInEx Configuration"
                            FontWeight="Bold"
                            FontSize="20"
-                           Margin="10"
+                           Margin="10,5,0,10"
                            Foreground="White"
                            Grid.Row="0"/>
 
-                <!-- Scrollable Content -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
                               Margin="10"
                               Grid.Row="1">
                     <StackPanel Name="ConfigOptionsPanel"
                                 Background="#1E1E1E"
                                 Margin="0,10,0,0">
-                        <TextBlock Text="BepInEx.cfg not found, have you ran the game to generate the needed files?"
+                        <TextBlock Text="BepInEx.cfg not found, have you run the game to generate the needed files?"
                                    Foreground="White"
                                    Margin="0,0,0,10"/>
                     </StackPanel>
                 </ScrollViewer>
 
-                <!-- Save Button -->
                 <Button Content="Save Config"
                         Width="100"
                         Background="#444444"
@@ -318,11 +424,11 @@
                         HorizontalAlignment="Right"
                         Margin="10"
                         Grid.Row="2"
-                        Click="SaveConfigChanges" />
+                        Click="SaveConfigChanges"/>
             </Grid>
         </Grid>
 
-        <!-- Console Log -->
+        <!-- ========== CONSOLE LOG (Row 2) ========== -->
         <TextBox Name="ConsoleLog"
                  Grid.Row="2"
                  Background="#1E1E1E"
@@ -330,6 +436,6 @@
                  IsReadOnly="True"
                  TextWrapping="Wrap"
                  VerticalScrollBarVisibility="Visible"
-                 Margin="10" />
+                 Margin="10"/>
     </Grid>
 </Window>

@@ -413,9 +413,10 @@ namespace TaikoModManager
             {
                 Title = "Create New Mod",
                 Width = 400,
-                Height = 300,
+                Height = 360,
                 Background = System.Windows.Media.Brushes.Black
             };
+
             var stack = new System.Windows.Controls.StackPanel { Margin = new Thickness(10) };
             w.Content = stack;
 
@@ -436,6 +437,15 @@ namespace TaikoModManager
             });
             var modNameBox = new System.Windows.Controls.TextBox { Margin = new Thickness(0, 0, 0, 10) };
             stack.Children.Add(modNameBox);
+
+            // Author
+            stack.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = "Author:",
+                Foreground = System.Windows.Media.Brushes.White
+            });
+            var authorBox = new System.Windows.Controls.TextBox { Margin = new Thickness(0, 0, 0, 10) };
+            stack.Children.Add(authorBox);
 
             // version
             stack.Children.Add(new System.Windows.Controls.TextBlock
@@ -466,6 +476,7 @@ namespace TaikoModManager
             {
                 string folderName = folderBox.Text.Trim();
                 string modName = modNameBox.Text.Trim();
+                string author = authorBox.Text.Trim();
                 string version = versionBox.Text.Trim();
                 string desc = descBox.Text.Trim();
 
@@ -475,6 +486,7 @@ namespace TaikoModManager
                                     MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
+
                 string modPath = Path.Combine(gamePath, "TekaSongs", folderName);
                 if (!Directory.Exists(modPath))
                     Directory.CreateDirectory(modPath);
@@ -485,6 +497,7 @@ namespace TaikoModManager
                 {
                     "enabled = false",
                     $"name = \"{modName}\"",
+                    $"author = \"{author}\"",
                     $"version = \"{version}\"",
                     $"description = \"{desc}\""
                 };
@@ -492,14 +505,17 @@ namespace TaikoModManager
 
                 MessageBox.Show($"Mod '{modName}' created successfully!", "Success",
                                 MessageBoxButton.OK, MessageBoxImage.Information);
+
                 w.Close();
 
+                // Reload the TekaTeka mods list
                 LoadTekaTekaMods();
             };
             stack.Children.Add(createBtn);
 
             w.ShowDialog();
         }
+
 
         /// <summary>
         /// Setup context menu for plugin items.
