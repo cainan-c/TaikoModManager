@@ -47,14 +47,28 @@ namespace TaikoModManager
                     await response.Content.CopyToAsync(fs);
                 }
 
-                // .zip or .dll
+                // Handle .zip or .dll
                 if (tempFilePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 {
                     ExtractAndInstallZip(tempFilePath, repoName, repoDescription, repoAuthor, githubRepoUrl, latestVersion);
                 }
                 else if (tempFilePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
                 {
-                    InstallDll(tempFilePath, repoName, repoDescription, repoAuthor, githubRepoUrl, latestVersion);
+                    string dllName = Path.GetFileName(tempFilePath);
+                    string dllNameLower = dllName.ToLowerInvariant();
+
+                    bool matchesRfOrCom = (dllNameLower.StartsWith("rf.") ||
+                                           dllNameLower.StartsWith("com.") ||
+                                           dllNameLower.Contains("rf"));
+
+                    string folderName = matchesRfOrCom
+                        ? Path.GetFileNameWithoutExtension(dllName)
+                        : repoName;
+
+                    string pluginFolder = Path.Combine(_pluginsPath, folderName);
+                    Directory.CreateDirectory(pluginFolder);
+
+                    InstallDll(tempFilePath, pluginFolder, folderName, repoDescription, repoAuthor, githubRepoUrl, latestVersion);
                 }
                 else
                 {
@@ -71,7 +85,7 @@ namespace TaikoModManager
         }
 
         /// <summary>
-        /// Checks for plugin updates by comparing local vs. latest version via the GitHub API.
+        /// Checks for plugin updates by comparing local vs. latest version via GitHub.
         /// </summary>
         public async Task CheckForUpdates(Action<string> logAction)
         {
@@ -91,8 +105,7 @@ namespace TaikoModManager
 
                     if (!pluginSection.TryGetValue("repo_url", out var repoUrlObj)) continue;
                     string repoUrl = repoUrlObj?.ToString() ?? "";
-                    if (string.IsNullOrWhiteSpace(repoUrl) || repoUrl == "No Repo URL")
-                        continue;
+                    if (string.IsNullOrWhiteSpace(repoUrl) || repoUrl == "No Repo URL") continue;
 
                     string localVersion = pluginSection.TryGetValue("version", out var versionObj) ? versionObj?.ToString() ?? "" : "";
                     if (string.IsNullOrEmpty(localVersion)) continue;
@@ -114,7 +127,8 @@ namespace TaikoModManager
         }
 
         /// <summary>
-        /// Returns a detailed list of installed plugins (reading from .toml files).
+        /// Returns a detailed list of installed plugins (from .toml files).
+        /// Only shows DLLs that start with "RF.", "com.", or contain "rf".
         /// </summary>
         public List<PluginInfo> LoadPluginsDetailed()
         {
@@ -126,12 +140,23 @@ namespace TaikoModManager
             {
                 foreach (string dllPath in Directory.GetFiles(pluginFolder, "*.dll", SearchOption.TopDirectoryOnly))
                 {
-                    var info = new PluginInfo();
                     string dllName = Path.GetFileName(dllPath);
-                    info.DllName = dllName;
-                    info.Name = dllName; // fallback
-                    info.Description = "";
-                    info.RepoUrl = "No Repo URL"; // fallback
+                    string dllNameLower = dllName.ToLowerInvariant();
+
+                    if (!(dllNameLower.StartsWith("rf.") ||
+                          dllNameLower.StartsWith("com.") ||
+                          dllNameLower.Contains("rf")))
+                    {
+                        continue;
+                    }
+
+                    var info = new PluginInfo
+                    {
+                        DllName = dllName,
+                        Name = dllName,
+                        Description = "",
+                        RepoUrl = "No Repo URL"
+                    };
 
                     string tomlPath = Path.Combine(_dataPath, dllName + ".toml");
                     if (File.Exists(tomlPath))
@@ -154,7 +179,6 @@ namespace TaikoModManager
                         }
                     }
 
-
                     string baseName = Path.GetFileNameWithoutExtension(dllName);
                     string possibleConfig = Path.Combine(_gamePath, "BepInEx", "config", baseName + ".cfg");
                     if (File.Exists(possibleConfig))
@@ -174,7 +198,7 @@ namespace TaikoModManager
                         }
                         catch
                         {
-                            // Ignore errors
+                            // ignore
                         }
                     }
                     else
@@ -189,12 +213,10 @@ namespace TaikoModManager
             return results;
         }
 
-        #region Internals
-
-        /// <summary>
-        /// Retrieve repository info (name, description, author) from the GitHub API.
-        /// </summary>
-        private async Task<(string repoName, string repoDescription, string repoAuthor)> FetchRepoInfo(string githubRepoUrl)
+        // --------------------------------------------------
+        // Public so MainWindow can call it
+        // --------------------------------------------------
+        public async Task<(string repoName, string repoDescription, string repoAuthor)> FetchRepoInfo(string githubRepoUrl)
         {
             var (owner, repo) = ParseOwnerAndRepo(githubRepoUrl);
             string apiUrl = $"https://api.github.com/repos/{owner}/{repo}";
@@ -205,12 +227,11 @@ namespace TaikoModManager
             string name = doc.RootElement.GetProperty("name").GetString();
             string desc = doc.RootElement.GetProperty("description").GetString();
             string author = doc.RootElement.GetProperty("owner").GetProperty("login").GetString();
-            return (name ?? "Unknown", desc ?? "No description provided", author ?? "Unknown Author");
+            return (name ?? "Unknown",
+                    desc ?? "No description provided",
+                    author ?? "Unknown Author");
         }
 
-        /// <summary>
-        /// Retrieve the latest release info (tag name, asset URL, asset name) from the GitHub API.
-        /// </summary>
         private async Task<(string tagName, string assetUrl, string assetName)> FetchLatestReleaseInfo(string githubRepoUrl)
         {
             var (owner, repo) = ParseOwnerAndRepo(githubRepoUrl);
@@ -238,19 +259,46 @@ namespace TaikoModManager
             throw new Exception("No .dll or .zip asset in latest release!");
         }
 
-        /// <summary>
-        /// Extract a .zip, then copy any .dll files into BepInEx\plugins and generate metadata files.
-        /// </summary>
-        private void ExtractAndInstallZip(string zipFilePath, string repoName, string repoDesc, string repoAuthor, string repoUrl, string version)
+        private void ExtractAndInstallZip(string zipFilePath, string repoName, string repoDesc, string repoAuthor,
+                                          string repoUrl, string version)
         {
             string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempDir);
+
             try
             {
                 ZipFile.ExtractToDirectory(zipFilePath, tempDir);
-                foreach (string dll in Directory.GetFiles(tempDir, "*.dll", SearchOption.AllDirectories))
+                string[] extractedDlls = Directory.GetFiles(tempDir, "*.dll", SearchOption.AllDirectories);
+
+                string primaryRfDll = null;
+                foreach (string dllPath in extractedDlls)
                 {
-                    InstallDll(dll, repoName, repoDesc, repoAuthor, repoUrl, version);
+                    string dllName = Path.GetFileName(dllPath).ToLowerInvariant();
+                    if (dllName.StartsWith("rf.") ||
+                        dllName.StartsWith("com.") ||
+                        dllName.Contains("rf"))
+                    {
+                        primaryRfDll = dllPath;
+                        break;
+                    }
+                }
+
+                string folderName;
+                if (!string.IsNullOrEmpty(primaryRfDll))
+                {
+                    folderName = Path.GetFileNameWithoutExtension(primaryRfDll);
+                }
+                else
+                {
+                    folderName = repoName;
+                }
+
+                string pluginFolder = Path.Combine(_pluginsPath, folderName);
+                Directory.CreateDirectory(pluginFolder);
+
+                foreach (string dll in extractedDlls)
+                {
+                    InstallDll(dll, pluginFolder, folderName, repoDesc, repoAuthor, repoUrl, version);
                 }
             }
             finally
@@ -260,16 +308,11 @@ namespace TaikoModManager
             }
         }
 
-        /// <summary>
-        /// Copies a single .dll to BepInEx\plugins, then creates/updates its .toml metadata file.
-        /// </summary>
-        private void InstallDll(string dllPath, string repoName, string repoDesc, string repoAuthor, string repoUrl, string version)
+        private void InstallDll(string dllPath, string pluginFolder, string pluginName,
+                                string pluginDesc, string pluginAuthor, string repoUrl, string version)
         {
             string dllName = Path.GetFileName(dllPath);
-            string pluginFolder = Path.Combine(_pluginsPath, Path.GetFileNameWithoutExtension(dllName)); // plugins/[dll file name]
-            Directory.CreateDirectory(pluginFolder);
-
-            string dest = Path.Combine(pluginFolder, dllName); // plugins/[dll file name]/[dll file]
+            string dest = Path.Combine(pluginFolder, dllName);
             File.Copy(dllPath, dest, overwrite: true);
 
             if (File.Exists(dllPath))
@@ -277,15 +320,16 @@ namespace TaikoModManager
                 try { File.Delete(dllPath); } catch { /* ignore */ }
             }
 
-            // Update or create metadata in the new plugin folder
             string tomlFile = Path.Combine(_dataPath, dllName + ".toml");
             if (!File.Exists(tomlFile))
             {
-                CreateMetadataFile(dest, repoName, repoDesc, repoAuthor, repoUrl, version);
+                CreateMetadataFile(dest, pluginName, pluginDesc, pluginAuthor, repoUrl, version);
             }
         }
 
-        private void CreateMetadataFile(string dllFullPath, string pluginName, string pluginDesc, string pluginAuthor, string repoUrl, string version)
+        private void CreateMetadataFile(string dllFullPath, string pluginName,
+                                        string pluginDesc, string pluginAuthor,
+                                        string repoUrl, string version)
         {
             string dllName = Path.GetFileName(dllFullPath);
             string tomlFile = Path.Combine(_dataPath, dllName + ".toml");
@@ -295,46 +339,30 @@ namespace TaikoModManager
                 ["author"] = pluginAuthor,
                 ["description"] = pluginDesc,
                 ["repo_url"] = repoUrl,
-                ["version"] = version // Ensure version is recorded
+                ["version"] = version
             };
             var meta = new TomlTable { ["plugin"] = pluginSec };
 
             File.WriteAllText(tomlFile, Toml.FromModel(meta));
         }
 
-        /// <summary>
-        /// Converts a GitHub URL to (owner, repo). For example:
-        ///   https://github.com/OWNER/REPO
-        ///   https://github.com/OWNER/REPO/releases
-        /// We'll just strip anything after the first 2 parts (OWNER and REPO).
-        /// </summary>
         private (string owner, string repo) ParseOwnerAndRepo(string githubUrl)
         {
-            // Remove trailing slash
             string trimmed = githubUrl.TrimEnd('/');
-
-            // Look for "github.com/"
             int idx = trimmed.IndexOf("github.com/", StringComparison.OrdinalIgnoreCase);
             if (idx < 0)
                 throw new InvalidOperationException("Invalid GitHub URL: " + githubUrl);
 
-            // Substring after "github.com/"
             trimmed = trimmed.Substring(idx + "github.com/".Length);
-
-            // Split on '/'
             var parts = trimmed.Split('/');
             if (parts.Length < 2)
                 throw new InvalidOperationException("Invalid GitHub URL: " + githubUrl);
 
             string owner = parts[0];
             string repository = parts[1];
-
             return (owner, repository);
         }
 
-        /// <summary>
-        /// Update all plugins that have a different version in the latest release than locally.
-        /// </summary>
         public async Task UpdateAllPluginsAsync(Action<string> logAction)
         {
             foreach (string pluginFolder in Directory.GetDirectories(_pluginsPath))
@@ -371,7 +399,5 @@ namespace TaikoModManager
             }
             logAction("Plugin update check complete.");
         }
-
-        #endregion
     }
 }

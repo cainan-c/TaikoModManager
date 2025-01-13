@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows;
-using Microsoft.Win32;  // For OpenFileDialog
+using Microsoft.Win32;  // for OpenFileDialog
 using Tomlyn;
 using Tomlyn.Model;
 
@@ -19,37 +22,58 @@ namespace TaikoModManager
         private PluginsTab _pluginsTab;
         private ModsTab _modsTab;
 
-        // Store where we keep config.toml (for example, "[exe folder]/data/config.toml")
+        // Paths
         private readonly string _dataPath;
         private readonly string _configFilePath;
 
+        // If launched with taikomodmanager:https://..., we'll store it here
+        private readonly string _incomingCustomUrl;
+
+        // ------------------------
+        // Default constructor
+        // ------------------------
         public MainWindow()
         {
             InitializeComponent();
 
-            // Build the data folder and config file paths
+            // 1) Prepare data/config paths
             _dataPath = Path.Combine(AppContext.BaseDirectory, "data");
             Directory.CreateDirectory(_dataPath);
 
             _configFilePath = Path.Combine(_dataPath, "config.toml");
 
+            // We'll do further setup in MainWindow_Loaded
             Loaded += MainWindow_Loaded;
         }
 
+        // --------------------------------
+        // Constructor that takes a custom URL
+        // --------------------------------
+        public MainWindow(string incomingUrl) : this()
+        {
+            _incomingCustomUrl = incomingUrl;
+        }
+
+        // --------------------------------------------------------------------
+        // Called when the window finishes loading
+        // --------------------------------------------------------------------
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // 1) Load or ask for game path
+            // 1) Load or detect game path
             gamePath = LoadOrDetectGamePath();
-            if (string.IsNullOrEmpty(gamePath) || !File.Exists(Path.Combine(gamePath, "Taiko no Tatsujin Rhythm Festival.exe")))
+            if (string.IsNullOrEmpty(gamePath) ||
+                !File.Exists(Path.Combine(gamePath, "Taiko no Tatsujin Rhythm Festival.exe")))
             {
-                MessageBox.Show("Could not locate the game path. Exiting...", "Error",
-                                MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Could not locate the game path. Exiting...",
+                                "Error",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
                 Close();
                 return;
             }
             LogToConsole($"Game path: {gamePath}");
 
-            // 2) Check for BepInEx existence
+            // 2) Check BepInEx
             string bepInExPath = Path.Combine(gamePath, BepInExFolderName);
             bepInExConfigPath = Path.Combine(bepInExPath, "config", "BepInEx.cfg");
 
@@ -60,18 +84,67 @@ namespace TaikoModManager
             }
             if (!File.Exists(bepInExConfigPath))
             {
-                LogToConsole("BepInEx.cfg not found. Run the game at least once to generate it.");
+                LogToConsole("BepInEx.cfg not found. Run the game once to generate it.");
             }
 
-            // 3) Create plugin manager and mod manager
+            // 3) Create managers
             _pluginsTab = new PluginsTab(gamePath);
             _modsTab = new ModsTab(gamePath);
 
             // Load Plugins
             LoadPluginsToList();
 
-            // Optionally check for plugin updates on startup
+            // Optionally check plugin updates
             await _pluginsTab.CheckForUpdates(LogToConsole);
+
+            // Check for application updates
+            CheckForUpdatesAsync();
+
+            // --------------------------------------------------------
+            // 4) If we have a custom GitHub URL, prompt user
+            // --------------------------------------------------------
+            if (!string.IsNullOrEmpty(_incomingCustomUrl))
+            {
+                LogToConsole($"Detected custom URL: {_incomingCustomUrl}");
+
+                try
+                {
+                    // Make sure FetchRepoInfo is public in PluginsTab
+                    var (repoName, repoDescription, repoAuthor) =
+                        await _pluginsTab.FetchRepoInfo(_incomingCustomUrl);
+
+                    // Confirm install
+                    MessageBoxResult mbResult = MessageBox.Show(
+                        $"Would you like to install the plugin '{repoName}'?",
+                        "Install Plugin",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (mbResult == MessageBoxResult.Yes)
+                    {
+                        // Install plugin
+                        await _pluginsTab.InstallPlugin(_incomingCustomUrl);
+
+                        MessageBox.Show($"Plugin '{repoName}' installed successfully!",
+                                        "Success",
+                                        MessageBoxButton.OK,
+                                        MessageBoxImage.Information);
+
+                        // Reload to see newly-installed plugin
+                        LoadPluginsToList();
+                    }
+                }
+                catch (Exception ex2)
+                {
+                    MessageBox.Show($"Error installing plugin from URL:\n{ex2.Message}",
+                                    "Error",
+                                    MessageBoxButton.OK,
+                                    MessageBoxImage.Error);
+                }
+            }
+            // 5) Add taikomodmanager: url association
+            string exePath = System.IO.Path.Combine(AppContext.BaseDirectory, "TaikoModManager.exe");
+            ProtocolRegistration.EnsureRegistered(exePath);
         }
 
         /// <summary>
@@ -103,11 +176,13 @@ namespace TaikoModManager
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Error reading config.toml: {ex.Message}",
-                                    "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                                    "Error",
+                                    MessageBoxButton.OK,
+                                    MessageBoxImage.Warning);
                 }
             }
 
-            // If we reach here, config either doesn't exist or is invalid.
+            // If we reach here, config either doesn't exist or is invalid
             // Try auto-detect
             string autoDetected = Utilities.DetectGamePath();
             if (!string.IsNullOrEmpty(autoDetected) && Directory.Exists(autoDetected))
@@ -193,6 +268,75 @@ namespace TaikoModManager
             }
         }
 
+        private async void CheckForUpdatesAsync()
+        {
+            string repoUrl = "https://api.github.com/repos/cainan-c/TaikoModManager/releases/latest";
+
+            try
+            {
+                using HttpClient client = new HttpClient();
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("TaikoModManager/1.0");
+
+                string response = await client.GetStringAsync(repoUrl);
+                using var doc = JsonDocument.Parse(response);
+
+                string latestVersion = doc.RootElement.GetProperty("tag_name").GetString();
+                string currentVersion = "1.1.0"; // app version
+
+                LogToConsole("Checking for Updates...");
+
+                if (latestVersion != currentVersion)
+                {
+                    string releaseNotes = doc.RootElement.GetProperty("body").GetString();
+                    if (MessageBox.Show(
+                        $"A new version ({latestVersion}) is available:\n\n{releaseNotes}\n\nDo you want to update now?",
+                        "Update Available",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Information) == MessageBoxResult.Yes)
+                    {
+                        try
+                        {
+                            string exeDirectory = Path.GetFullPath(AppContext.BaseDirectory);
+                            string helperAppPath = Path.Combine(exeDirectory, "UpdateHelper.exe");
+
+                            if (!File.Exists(helperAppPath))
+                            {
+                                throw new FileNotFoundException(
+                                    "UpdateHelper.exe not found. Ensure it is located in the application directory.");
+                            }
+
+                            LogToConsole("Launching UpdateHelper...");
+                            var processStartInfo = new ProcessStartInfo
+                            {
+                                FileName = helperAppPath,
+                                UseShellExecute = false,
+                                CreateNoWindow = true
+                            };
+
+                            Process.Start(processStartInfo);
+                            LogToConsole("UpdateHelper launched. Closing application...");
+                            Application.Current.Shutdown();
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Error launching UpdateHelper: {ex.Message}", "Error",
+                                MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                    }
+                }
+                else
+                {
+                    LogToConsole("No Updates Found. You are using the latest version.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error checking for updates: {ex.Message}", "Error",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
+            }
+        }
+
         /// <summary> Switch to TekaTeka Mods Tab. </summary>
         private void SwitchToTekaTekaModsTab(object sender, RoutedEventArgs e)
         {
@@ -244,27 +388,30 @@ namespace TaikoModManager
             if (string.IsNullOrEmpty(gamePath))
             {
                 MessageBox.Show("Game path is not set.", "Error",
-                                MessageBoxButton.OK, MessageBoxImage.Error);
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
                 LogToConsole("Game path is null or empty.");
                 return;
             }
             if (!Directory.Exists(gamePath))
             {
                 MessageBox.Show($"Directory does not exist:\n{gamePath}", "Error",
-                                MessageBoxButton.OK, MessageBoxImage.Error);
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
                 LogToConsole($"Game directory not found: {gamePath}");
                 return;
             }
             try
             {
                 string normalizedGamePath = gamePath.Replace(@"\\", @"\").Replace(@"/", @"\");
-                System.Diagnostics.Process.Start("explorer.exe", normalizedGamePath);
+                Process.Start("explorer.exe", normalizedGamePath);
                 LogToConsole($"Game directory opened: {normalizedGamePath}");
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error opening game directory: {ex.Message}", "Error",
-                                MessageBoxButton.OK, MessageBoxImage.Error);
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
                 LogToConsole($"Error opening game directory: {ex.Message}");
             }
         }
@@ -280,7 +427,7 @@ namespace TaikoModManager
             }
             try
             {
-                System.Diagnostics.Process.Start(exePath);
+                Process.Start(exePath);
                 LogToConsole("Game launched successfully.");
             }
             catch (Exception ex)
@@ -289,7 +436,7 @@ namespace TaikoModManager
             }
         }
 
-        /// <summary> Install Plugin. </summary>
+        /// <summary> Install Plugin (prompted by user in the UI). </summary>
         private async void InstallPluginButton_Click(object sender, RoutedEventArgs e)
         {
             string url = Microsoft.VisualBasic.Interaction.InputBox(
@@ -328,7 +475,6 @@ namespace TaikoModManager
             PluginList.ItemContainerGenerator.StatusChanged += PluginList_StatusChanged;
         }
 
-
         private void PluginList_StatusChanged(object sender, EventArgs e)
         {
             if (PluginList.ItemContainerGenerator.Status ==
@@ -344,11 +490,12 @@ namespace TaikoModManager
             if (!Directory.Exists(pluginsPath))
             {
                 MessageBox.Show("Plugins folder not found.", "Error",
-                                MessageBoxButton.OK, MessageBoxImage.Error);
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
                 return;
             }
             string normPath = pluginsPath.Replace(@"\\", @"\").Replace(@"/", @"\");
-            System.Diagnostics.Process.Start("explorer.exe", normPath);
+            Process.Start("explorer.exe", normPath);
             LogToConsole($"Plugins folder opened: {normPath}");
         }
 
@@ -408,7 +555,6 @@ namespace TaikoModManager
 
         private void CreateModButton_Click(object sender, RoutedEventArgs e)
         {
-            // Simple creation window
             var w = new Window
             {
                 Title = "Create New Mod",
@@ -420,7 +566,6 @@ namespace TaikoModManager
             var stack = new System.Windows.Controls.StackPanel { Margin = new Thickness(10) };
             w.Content = stack;
 
-            // Folder name
             stack.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = "Folder Name (no spaces):",
@@ -429,7 +574,6 @@ namespace TaikoModManager
             var folderBox = new System.Windows.Controls.TextBox { Margin = new Thickness(0, 0, 0, 10) };
             stack.Children.Add(folderBox);
 
-            // Mod name
             stack.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = "Mod Name:",
@@ -438,7 +582,6 @@ namespace TaikoModManager
             var modNameBox = new System.Windows.Controls.TextBox { Margin = new Thickness(0, 0, 0, 10) };
             stack.Children.Add(modNameBox);
 
-            // Author
             stack.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = "Author:",
@@ -447,7 +590,6 @@ namespace TaikoModManager
             var authorBox = new System.Windows.Controls.TextBox { Margin = new Thickness(0, 0, 0, 10) };
             stack.Children.Add(authorBox);
 
-            // version
             stack.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = "Version:",
@@ -456,7 +598,6 @@ namespace TaikoModManager
             var versionBox = new System.Windows.Controls.TextBox { Text = "1.0", Margin = new Thickness(0, 0, 0, 10) };
             stack.Children.Add(versionBox);
 
-            // desc
             stack.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = "Description:",
@@ -483,7 +624,8 @@ namespace TaikoModManager
                 if (string.IsNullOrEmpty(folderName) || string.IsNullOrEmpty(modName))
                 {
                     MessageBox.Show("Folder Name and Mod Name cannot be empty.", "Error",
-                                    MessageBoxButton.OK, MessageBoxImage.Error);
+                                    MessageBoxButton.OK,
+                                    MessageBoxImage.Error);
                     return;
                 }
 
@@ -504,7 +646,8 @@ namespace TaikoModManager
                 File.WriteAllLines(configPath, lines);
 
                 MessageBox.Show($"Mod '{modName}' created successfully!", "Success",
-                                MessageBoxButton.OK, MessageBoxImage.Information);
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Information);
 
                 w.Close();
 
@@ -515,7 +658,6 @@ namespace TaikoModManager
 
             w.ShowDialog();
         }
-
 
         /// <summary>
         /// Setup context menu for plugin items.
@@ -562,12 +704,12 @@ namespace TaikoModManager
 
             try
             {
-                var psi = new System.Diagnostics.ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = repoUrl,
                     UseShellExecute = true
                 };
-                System.Diagnostics.Process.Start(psi);
+                Process.Start(psi);
             }
             catch (Exception ex)
             {
@@ -651,7 +793,7 @@ namespace TaikoModManager
                     try
                     {
                         string normFolder = modFolder.Replace(@"\\", @"\").Replace(@"/", @"\");
-                        System.Diagnostics.Process.Start("explorer.exe", normFolder);
+                        Process.Start("explorer.exe", normFolder);
                     }
                     catch (Exception ex)
                     {
@@ -725,9 +867,13 @@ namespace TaikoModManager
             w.ShowDialog();
         }
 
+        /// <summary>
+        /// Helper method to append log messages to a console UI element.
+        /// </summary>
         private void LogToConsole(string message)
         {
-            ConsoleLog.AppendText(message + "\n");
+            // If your XAML has a TextBox named "ConsoleLog"
+            ConsoleLog.AppendText(message + Environment.NewLine);
             ConsoleLog.ScrollToEnd();
         }
     }

@@ -34,7 +34,31 @@
     <Content Include="res\app-icon.ico" />
   </ItemGroup>
 
-  <ItemGroup>
+	<ItemGroup>
+		<None Include="..\UpdateHelper\bin\Release\net8.0\UpdateHelper.exe">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="..\UpdateHelper\bin\Release\net8.0\UpdateHelper.dll">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="..\UpdateHelper\bin\Release\net8.0\UpdateHelper.runtimeconfig.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+	
+	<ItemGroup>
+		<None Include="..\TaikoModManager\7z\7z.exe">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>		
+	
+	<ItemGroup>
     <None Include="..\LICENSE">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
