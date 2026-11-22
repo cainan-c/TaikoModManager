@@ -21,6 +21,7 @@
 	<!-- build.bat supplies the commit-derived values for release builds. -->
 	<Version>0.0.0-git.local</Version>
 	<InformationalVersion>0.0.0-git.local+local</InformationalVersion>
+	<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 	<PublishDir>$(MSBuildProjectDirectory)\bin\Release\TaikoModManager-$(Version)\</PublishDir>
     <ApplicationIcon>res\app-icon.ico</ApplicationIcon>
   </PropertyGroup>

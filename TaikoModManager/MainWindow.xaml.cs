@@ -48,6 +48,7 @@ namespace TaikoModManager
         public MainWindow()
         {
             InitializeComponent();
+            SetBuildTitle();
 
             // 1) Prepare data/config paths
             ManagerCache.MigrateLegacyMetadata();
@@ -343,7 +344,7 @@ namespace TaikoModManager
                 LogToConsole("Checking for Updates...");
 
                 if (string.IsNullOrWhiteSpace(currentCommit) ||
-                    !string.Equals(latestCommit, currentCommit, StringComparison.OrdinalIgnoreCase))
+                    !CommitsMatch(latestCommit, currentCommit))
                 {
                     string releaseNotes = doc.RootElement.GetProperty("body").GetString() ?? string.Empty;
                     string releaseUrl = doc.RootElement.TryGetProperty("html_url", out JsonElement htmlUrl)
@@ -390,9 +391,35 @@ namespace TaikoModManager
                 .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
                 .InformationalVersion;
             int separator = informationalVersion?.LastIndexOf('+') ?? -1;
-            return separator >= 0 && separator < informationalVersion!.Length - 1
-                ? informationalVersion[(separator + 1)..]
-                : string.Empty;
+            if (separator < 0 || separator >= informationalVersion!.Length - 1)
+            {
+                return string.Empty;
+            }
+
+            // Older commit builds received the source revision twice from the SDK.
+            // Keep them comparable with new GitHub Action builds as well.
+            return informationalVersion[(separator + 1)..].Split('.', 2)[0];
+        }
+
+        private void SetBuildTitle()
+        {
+            string commit = GetCurrentBuildCommit();
+            string displayCommit = string.IsNullOrWhiteSpace(commit)
+                ? "unknown"
+                : commit[..Math.Min(8, commit.Length)];
+            Title = $"Taiko Mod Manager — Commit {displayCommit}";
+        }
+
+        private static bool CommitsMatch(string first, string second)
+        {
+            if (string.IsNullOrWhiteSpace(first) || string.IsNullOrWhiteSpace(second))
+            {
+                return false;
+            }
+
+            return string.Equals(first, second, StringComparison.OrdinalIgnoreCase) ||
+                   first.StartsWith(second, StringComparison.OrdinalIgnoreCase) ||
+                   second.StartsWith(first, StringComparison.OrdinalIgnoreCase);
         }
 
         private async void MainTabs_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -576,6 +603,20 @@ namespace TaikoModManager
                 return;
             }
 
+            TaikoArchiveInstalledItem? existingInstall = _archiveBrowser.FindInstalledPost(post);
+            if (existingInstall != null)
+            {
+                string folderName = Path.GetFileName(existingInstall.InstallPath);
+                if (MessageBox.Show(
+                        $"'{post.Name}' is already installed in '{folderName}'.\n\nReplace the installed files with this download?",
+                        "Replace Installed Mod",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question) != MessageBoxResult.Yes)
+                {
+                    return;
+                }
+            }
+
             int? fileIndex = ChooseArchiveFile(post);
             if (!fileIndex.HasValue)
             {
@@ -600,7 +641,7 @@ namespace TaikoModManager
                     BrowseDownloadProgress.IsIndeterminate = false;
                     BrowseDownloadProgress.Value = percentage;
                 });
-                string installPath = await _archiveBrowser.DownloadAndInstallAsync(post, fileIndex.Value, downloadProgress);
+                string installPath = await _archiveBrowser.DownloadAndInstallAsync(post, fileIndex.Value, downloadProgress, existingInstall);
                 BrowseStatusText.Text = $"Installed {post.Name}";
                 LogToConsole($"Installed archive {post.TypeLabel.ToLowerInvariant()}: {post.Name} -> {installPath}");
 

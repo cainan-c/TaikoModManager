@@ -52,6 +52,50 @@ namespace TaikoModManager
             return post ?? throw new InvalidOperationException("Taiko Mod Archive returned an empty post.");
         }
 
+        /// <summary>Finds the current install for an archive post using manager-owned metadata.</summary>
+        public TaikoArchiveInstalledItem? FindInstalledPost(TaikoArchivePost post)
+        {
+            ManagerCache.EnsureDirectories();
+            string installRoot = post.IsPlugin
+                ? Path.Combine(_gamePath, "BepInEx", "plugins")
+                : Path.Combine(_gamePath, "TekaSongs");
+
+            foreach (string metadataPath in Directory.EnumerateFiles(ManagerCache.TmmDirectory, "*.toml", SearchOption.TopDirectoryOnly))
+            {
+                try
+                {
+                    var model = Toml.ToModel(File.ReadAllText(metadataPath));
+                    if (!model.TryGetValue("archive", out var archiveObj) || archiveObj is not TomlTable archive ||
+                        !archive.TryGetValue("post_id", out var postIdObj) ||
+                        !long.TryParse(postIdObj?.ToString(), out long cachedPostId) || cachedPostId != post.Id ||
+                        !archive.TryGetValue("post_type", out var postTypeObj) ||
+                        !string.Equals(postTypeObj?.ToString(), post.PostType, StringComparison.OrdinalIgnoreCase) ||
+                        !archive.TryGetValue("installed_folder", out var folderObj))
+                    {
+                        continue;
+                    }
+
+                    string folderName = Path.GetFileName(folderObj?.ToString() ?? string.Empty);
+                    if (string.IsNullOrWhiteSpace(folderName))
+                    {
+                        continue;
+                    }
+
+                    string installPath = Path.Combine(installRoot, folderName);
+                    if (Directory.Exists(installPath))
+                    {
+                        return new TaikoArchiveInstalledItem(installPath, metadataPath);
+                    }
+                }
+                catch
+                {
+                    // Ignore damaged cache entries and continue checking the remaining metadata.
+                }
+            }
+
+            return null;
+        }
+
         public async Task<TaikoArchiveFeed> GetFeedAsync(int page, int pageSize, TaikoArchiveSort sort, string search, string? postType = null)
         {
             page = Math.Max(1, page);
@@ -109,7 +153,9 @@ namespace TaikoModManager
             };
         }
 
-        public async Task<string> DownloadAndInstallAsync(TaikoArchivePost post, int fileIndex, IProgress<double>? downloadProgress = null)
+        public async Task<string> DownloadAndInstallAsync(TaikoArchivePost post, int fileIndex,
+                                                          IProgress<double>? downloadProgress = null,
+                                                          TaikoArchiveInstalledItem? replaceExisting = null)
         {
             if (!string.Equals(post.PostGame, RhythmFestivalPc, StringComparison.OrdinalIgnoreCase))
             {
@@ -180,10 +226,52 @@ namespace TaikoModManager
 
                 string folderName = GetSafeFolderName(post.Name, post.Id);
                 string installPath = GetUniqueDirectoryPath(installRoot, folderName);
-                CopyDirectory(contentRoot, installPath);
-                string previewFileName = await CachePreviewAsync(post);
-                WriteArchiveMetadata(post, installPath, primaryDllName, previewFileName);
-                return installPath;
+                string? backupPath = null;
+
+                if (replaceExisting != null)
+                {
+                    string existingPath = Path.GetFullPath(replaceExisting.InstallPath);
+                    if (!IsPathWithinDirectory(existingPath, installRoot) || !Directory.Exists(existingPath))
+                    {
+                        throw new InvalidOperationException("The existing archive install is no longer available to replace.");
+                    }
+
+                    installPath = existingPath;
+                    backupPath = Path.Combine(installRoot, $".{Path.GetFileName(existingPath)}.tmm-backup-{Guid.NewGuid():N}");
+                    Directory.Move(existingPath, backupPath);
+                }
+
+                try
+                {
+                    CopyDirectory(contentRoot, installPath);
+                    string previewFileName = await CachePreviewAsync(post);
+                    string metadataPath = WriteArchiveMetadata(post, installPath, primaryDllName, previewFileName);
+                    if (replaceExisting != null &&
+                        !string.Equals(replaceExisting.MetadataPath, metadataPath, StringComparison.OrdinalIgnoreCase) &&
+                        File.Exists(replaceExisting.MetadataPath))
+                    {
+                        File.Delete(replaceExisting.MetadataPath);
+                    }
+
+                    if (backupPath != null && Directory.Exists(backupPath))
+                    {
+                        Directory.Delete(backupPath, recursive: true);
+                    }
+
+                    return installPath;
+                }
+                catch
+                {
+                    if (backupPath != null && Directory.Exists(backupPath))
+                    {
+                        if (Directory.Exists(installPath))
+                        {
+                            Directory.Delete(installPath, recursive: true);
+                        }
+                        Directory.Move(backupPath, installPath);
+                    }
+                    throw;
+                }
             }
             finally
             {
@@ -236,7 +324,7 @@ namespace TaikoModManager
             }
         }
 
-        private static void WriteArchiveMetadata(TaikoArchivePost post, string installPath, string? primaryDllName, string previewFileName)
+        private static string WriteArchiveMetadata(TaikoArchivePost post, string installPath, string? primaryDllName, string previewFileName)
         {
             ManagerCache.EnsureDirectories();
             string installedFolder = Path.GetFileName(installPath);
@@ -259,6 +347,13 @@ namespace TaikoModManager
                 ? ManagerCache.ArchivePluginMetadataPath(primaryDllName!)
                 : ManagerCache.ArchiveSongMetadataPath(installedFolder);
             File.WriteAllText(metadataPath, Toml.FromModel(metadata));
+            return metadataPath;
+        }
+
+        private static bool IsPathWithinDirectory(string path, string directory)
+        {
+            string fullDirectory = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return Path.GetFullPath(path).StartsWith(fullDirectory, StringComparison.OrdinalIgnoreCase);
         }
 
         private static async Task ExtractArchiveAsync(string archivePath, string destination, bool isPlugin)
@@ -381,6 +476,8 @@ namespace TaikoModManager
         public int Page { get; init; }
         public int TotalPages { get; init; }
     }
+
+    public sealed record TaikoArchiveInstalledItem(string InstallPath, string MetadataPath);
 
     public sealed class TaikoArchivePost
     {
