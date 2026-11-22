@@ -2,7 +2,11 @@
 
 Taiko Mod Manager is a tool designed to enhance your experience with the Steam Release of *Taiko no Tatsujin: Rhythm Festival*. It provides features for managing mods, plugins, and configurations, with integration for BepInEx.
 
-![A screenshot of Taiko Mod Manager, showing the plugin manager screen.](https://i.imgur.com/XLr5Fsl.png "Main Window")
+## AI disclosure
+
+The `rewrite` branch was developed with substantial assistance from OpenAI Codex. AI was used for implementation and UI work; project maintainers remain responsible for reviewing, testing, and shipping the code.
+
+![A screenshot of Taiko Mod Manager, showing the plugin manager screen.](TaikoModManager/res/readme-screenshot.png "Main Window")
 
 ## Features
 
@@ -10,7 +14,11 @@ Taiko Mod Manager is a tool designed to enhance your experience with the Steam R
 - **Plugin Management**: Install and update directly from GitHub repositories as well as directly manage plugins configuration.
 - **Mod Management**: Enable, disable, and configure mods through a user-friendly interface.
 - **BepInEx Integration**: Automatically installs BepInEx if not present and manages its configuration.
+- **Taiko Mod Archive Browser**: Browse, search, download, and install Rhythm Festival PC plugins and song mods from Taiko Mod Archive without leaving the manager.
+- **Cached Archive Details**: Locally caches Taiko Mod Archive metadata and preview images, and checks archive installs for updates using their post IDs and last-updated timestamps.
 - **TekaTeka Support**: Includes functionality for managing TekaTeka mods.
+- **Manager Settings**: Change the game folder, optionally add a GitHub API key, and choose whether Launch uses Steam or starts the game executable directly.
+- **GitHub Release Checks**: Compares the running build's commit with the latest GitHub release and can open its release page when a newer build is available.
 
 ## Requirements
 
@@ -38,7 +46,8 @@ Taiko Mod Manager is a tool designed to enhance your experience with the Steam R
 2. Follow the on-screen instructions to locate the game executable (`Taiko no Tatsujin Rhythm Festival.exe`).
 3. Use the tabs to manage:
    - **Plugins**: Install, update, and configure plugins.
-   - **Mods**: Manage TekaTeka mods and their configurations.
+   - **TekaTeka Mods**: Manage TekaTeka song mods and their configurations. If TekaTeka is not installed, accept the prompt to install it from Taiko Mod Archive, then launch the game once to create `TekaSongs`.
+   - **Browse Mods**: Find and install Rhythm Festival PC plugins or song mods from Taiko Mod Archive.
    - **BepInEx Config**: Edit BepInEx settings.
 4. Enjoy a customized *Taiko no Tatsujin* experience!
 
@@ -62,6 +71,14 @@ The application attempts to locate the game automatically by checking Steam libr
 ### Configuration
 
 - View and edit `BepInEx.cfg` through an intuitive UI.
+- Edit plugin and song-mod configuration files using type-aware controls for sections, comments, checkboxes, and text settings.
+- Open **Mod Manager Config** to change the game location, launch type, or GitHub API key.
+
+### Updates
+
+- Builds are identified by the Git commit they were produced from.
+- The manager checks GitHub Releases for a newer build and opens the release page on request; it does not replace its own files automatically.
+- GitHub Actions creates a new commit-tagged `latest` release for every push to the `rewrite` branch.
 
 ## Contributing
 

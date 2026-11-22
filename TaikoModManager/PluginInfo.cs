@@ -14,6 +14,20 @@ namespace TaikoModManager
         public string DllName { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
+        public string Source { get; set; } = "External";
+        public string PreviewUrl { get; set; } = string.Empty;
+        public string LastUpdated { get; set; } = string.Empty;
+        public string VersionDisplay =>
+            string.Equals(Source, "TaikoModArchive", StringComparison.OrdinalIgnoreCase)
+                ? string.IsNullOrWhiteSpace(LastUpdated)
+                    ? "Last updated unavailable"
+                    : $"Last updated {FormatArchiveTimestamp(LastUpdated)}"
+                : $"Version {Version}";
+
+        private static string FormatArchiveTimestamp(string timestamp) =>
+            DateTimeOffset.TryParse(timestamp, out DateTimeOffset value)
+                ? value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")
+                : timestamp;
 
         // e.g., "BepInEx/config/RF.TekaTeka.cfg"
         public string ConfigPath { get; set; }

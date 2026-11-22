@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -15,16 +16,16 @@ namespace TaikoModManager
     {
         private readonly string _gamePath;
         private readonly string _pluginsPath;
-        private readonly string _dataPath;
+        private readonly string _githubApiKey;
 
-        public PluginsTab(string gamePath)
+        public PluginsTab(string gamePath, string githubApiKey = "")
         {
             _gamePath = gamePath;
             _pluginsPath = Path.Combine(_gamePath, "BepInEx", "plugins");
-            _dataPath = Path.Combine(AppContext.BaseDirectory, "data");
+            _githubApiKey = githubApiKey?.Trim() ?? "";
 
             Directory.CreateDirectory(_pluginsPath);
-            Directory.CreateDirectory(_dataPath);
+            ManagerCache.EnsureDirectories();
         }
 
         /// <summary>
@@ -38,7 +39,7 @@ namespace TaikoModManager
                 var (latestVersion, assetDownloadUrl, assetFileName) = await FetchLatestReleaseInfo(githubRepoUrl);
 
                 string tempFilePath = Path.Combine(Path.GetTempPath(), assetFileName);
-                using (HttpClient client = new HttpClient())
+                using (HttpClient client = CreateGitHubClient())
                 {
                     var response = await client.GetAsync(assetDownloadUrl, HttpCompletionOption.ResponseHeadersRead);
                     response.EnsureSuccessStatusCode();
@@ -68,7 +69,7 @@ namespace TaikoModManager
                     string pluginFolder = Path.Combine(_pluginsPath, folderName);
                     Directory.CreateDirectory(pluginFolder);
 
-                    InstallDll(tempFilePath, pluginFolder, folderName, repoDescription, repoAuthor, githubRepoUrl, latestVersion);
+                    InstallDll(tempFilePath, pluginFolder, folderName, repoDescription, repoAuthor, githubRepoUrl, latestVersion, createMetadata: true);
                 }
                 else
                 {
@@ -89,40 +90,47 @@ namespace TaikoModManager
         /// </summary>
         public async Task CheckForUpdates(Action<string> logAction)
         {
-            foreach (string pluginFolder in Directory.GetDirectories(_pluginsPath))
+            try
             {
-                foreach (string dllFile in Directory.GetFiles(pluginFolder, "*.dll", SearchOption.TopDirectoryOnly))
+                foreach (string pluginFolder in Directory.GetDirectories(_pluginsPath))
                 {
-                    string dllName = Path.GetFileName(dllFile);
-                    string tomlPath = Path.Combine(_dataPath, dllName + ".toml");
-                    if (!File.Exists(tomlPath)) continue;
-
-                    var tomlString = File.ReadAllText(tomlPath);
-                    var tomlModel = Toml.ToModel(tomlString);
-
-                    if (!tomlModel.TryGetValue("plugin", out var pluginObj) || pluginObj is not TomlTable pluginSection)
-                        continue;
-
-                    if (!pluginSection.TryGetValue("repo_url", out var repoUrlObj)) continue;
-                    string repoUrl = repoUrlObj?.ToString() ?? "";
-                    if (string.IsNullOrWhiteSpace(repoUrl) || repoUrl == "No Repo URL") continue;
-
-                    string localVersion = pluginSection.TryGetValue("version", out var versionObj) ? versionObj?.ToString() ?? "" : "";
-                    if (string.IsNullOrEmpty(localVersion)) continue;
-
-                    try
+                    foreach (string dllFile in Directory.GetFiles(pluginFolder, "*.dll", SearchOption.TopDirectoryOnly))
                     {
-                        var (latestVersion, _, _) = await FetchLatestReleaseInfo(repoUrl);
-                        if (!string.IsNullOrEmpty(latestVersion) && latestVersion != localVersion)
+                        string dllName = Path.GetFileName(dllFile);
+                        try
                         {
-                            logAction?.Invoke($"Plugin '{dllName}' has an update! Local: {localVersion}, Latest: {latestVersion}");
+                            string tomlPath = ManagerCache.GitHubPluginMetadataPath(dllName);
+                            if (!File.Exists(tomlPath)) continue;
+
+                            var tomlString = File.ReadAllText(tomlPath);
+                            var tomlModel = Toml.ToModel(tomlString);
+
+                            if (!tomlModel.TryGetValue("plugin", out var pluginObj) || pluginObj is not TomlTable pluginSection)
+                                continue;
+
+                            if (!pluginSection.TryGetValue("repo_url", out var repoUrlObj)) continue;
+                            string repoUrl = repoUrlObj?.ToString() ?? "";
+                            if (string.IsNullOrWhiteSpace(repoUrl) || repoUrl == "No Repo URL") continue;
+
+                            string localVersion = pluginSection.TryGetValue("version", out var versionObj) ? versionObj?.ToString() ?? "" : "";
+                            if (string.IsNullOrEmpty(localVersion)) continue;
+
+                            var (latestVersion, _, _) = await FetchLatestReleaseInfo(repoUrl);
+                            if (!string.IsNullOrEmpty(latestVersion) && latestVersion != localVersion)
+                            {
+                                logAction?.Invoke($"Plugin '{dllName}' has an update! Local: {localVersion}, Latest: {latestVersion}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logAction?.Invoke($"Update check skipped for '{dllName}': {ex.Message}");
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        logAction?.Invoke($"CheckForUpdates error on '{dllName}': {ex.Message}");
-                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                logAction?.Invoke($"Plugin update check could not start: {ex.Message}");
             }
         }
 
@@ -138,14 +146,24 @@ namespace TaikoModManager
 
             foreach (string pluginFolder in Directory.GetDirectories(_pluginsPath))
             {
+                string? managedPrimaryDll = FindManagedPrimaryDll(pluginFolder);
                 foreach (string dllPath in Directory.GetFiles(pluginFolder, "*.dll", SearchOption.TopDirectoryOnly))
                 {
                     string dllName = Path.GetFileName(dllPath);
                     string dllNameLower = dllName.ToLowerInvariant();
+                    string tmmMetadataPath = ManagerCache.ArchivePluginMetadataPath(dllName);
+                    string githubMetadataPath = ManagerCache.GitHubPluginMetadataPath(dllName);
+
+                    if (!string.IsNullOrWhiteSpace(managedPrimaryDll) &&
+                        !string.Equals(dllName, managedPrimaryDll, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
 
                     if (!(dllNameLower.StartsWith("rf.") ||
                           dllNameLower.StartsWith("com.") ||
-                          dllNameLower.Contains("rf")))
+                          dllNameLower.Contains("rf")) &&
+                        string.IsNullOrWhiteSpace(managedPrimaryDll))
                     {
                         continue;
                     }
@@ -155,27 +173,36 @@ namespace TaikoModManager
                         DllName = dllName,
                         Name = dllName,
                         Description = "",
-                        RepoUrl = "No Repo URL"
+                        RepoUrl = "No Repo URL",
+                        Source = "External"
                     };
 
-                    string tomlPath = Path.Combine(_dataPath, dllName + ".toml");
-                    if (File.Exists(tomlPath))
+                    if (File.Exists(tmmMetadataPath))
                     {
-                        var tomlString = File.ReadAllText(tomlPath);
-                        var tomlModel = Toml.ToModel(tomlString);
-
-                        if (tomlModel.TryGetValue("plugin", out var pluginObj) && pluginObj is TomlTable pluginSec)
+                        ApplyArchiveMetadata(info, tmmMetadataPath);
+                    }
+                    else
+                    {
+                        string tomlPath = githubMetadataPath;
+                        if (File.Exists(tomlPath))
                         {
-                            if (pluginSec.TryGetValue("name", out var nmObj))
-                                info.Name = nmObj?.ToString() ?? dllName;
-                            if (pluginSec.TryGetValue("description", out var descObj))
-                                info.Description = descObj?.ToString() ?? "";
-                            if (pluginSec.TryGetValue("repo_url", out var repoUrlObj))
-                                info.RepoUrl = repoUrlObj?.ToString() ?? "No Repo URL";
-                            if (pluginSec.TryGetValue("version", out var versionObj))
-                                info.Version = versionObj?.ToString() ?? "Unknown Version";
-                            if (pluginSec.TryGetValue("author", out var authorObj))
-                                info.Author = authorObj?.ToString() ?? "Unknown Author";
+                            var tomlString = File.ReadAllText(tomlPath);
+                            var tomlModel = Toml.ToModel(tomlString);
+
+                            if (tomlModel.TryGetValue("plugin", out var pluginObj) && pluginObj is TomlTable pluginSec)
+                            {
+                                if (pluginSec.TryGetValue("name", out var nmObj))
+                                    info.Name = nmObj?.ToString() ?? dllName;
+                                if (pluginSec.TryGetValue("description", out var descObj))
+                                    info.Description = descObj?.ToString() ?? "";
+                                if (pluginSec.TryGetValue("repo_url", out var repoUrlObj))
+                                    info.RepoUrl = repoUrlObj?.ToString() ?? "No Repo URL";
+                                if (pluginSec.TryGetValue("version", out var versionObj))
+                                    info.Version = versionObj?.ToString() ?? "Unknown Version";
+                                if (pluginSec.TryGetValue("author", out var authorObj))
+                                    info.Author = authorObj?.ToString() ?? "Unknown Author";
+                                info.Source = "GitHub";
+                            }
                         }
                     }
 
@@ -213,6 +240,76 @@ namespace TaikoModManager
             return results;
         }
 
+        private static string? FindManagedPrimaryDll(string pluginFolder)
+        {
+            foreach (string dllPath in Directory.GetFiles(pluginFolder, "*.dll", SearchOption.TopDirectoryOnly))
+            {
+                string dllName = Path.GetFileName(dllPath);
+                foreach (string metadataPath in new[]
+                         {
+                             ManagerCache.ArchivePluginMetadataPath(dllName),
+                             ManagerCache.GitHubPluginMetadataPath(dllName)
+                         })
+                {
+                    if (!File.Exists(metadataPath))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        var model = Toml.ToModel(File.ReadAllText(metadataPath));
+                        string sectionName = metadataPath.StartsWith(ManagerCache.TmmDirectory, StringComparison.OrdinalIgnoreCase)
+                            ? "archive"
+                            : "plugin";
+                        if (model.TryGetValue(sectionName, out var sectionObj) && sectionObj is TomlTable section &&
+                            section.TryGetValue("primary_dll", out var primaryDllObj) &&
+                            !string.IsNullOrWhiteSpace(primaryDllObj?.ToString()))
+                        {
+                            return primaryDllObj.ToString();
+                        }
+
+                        // Older cache files have no reliable package-primary marker.
+                        // Let the normal plugin-name rules decide which legacy entries should be visible.
+                    }
+                    catch
+                    {
+                        // Ignore malformed cache metadata and treat the DLL as external.
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static void ApplyArchiveMetadata(PluginInfo info, string metadataPath)
+        {
+            try
+            {
+                var model = Toml.ToModel(File.ReadAllText(metadataPath));
+                if (!model.TryGetValue("archive", out var archiveObj) || archiveObj is not TomlTable archive)
+                {
+                    return;
+                }
+
+                if (archive.TryGetValue("name", out var name)) info.Name = name?.ToString() ?? info.Name;
+                if (archive.TryGetValue("author", out var author)) info.Author = author?.ToString() ?? info.Author;
+                if (archive.TryGetValue("description", out var description)) info.Description = description?.ToString() ?? info.Description;
+                if (archive.TryGetValue("last_updated", out var lastUpdated)) info.LastUpdated = lastUpdated?.ToString() ?? string.Empty;
+                if (archive.TryGetValue("preview_file", out var previewFile))
+                {
+                    string cachedPreview = Path.Combine(ManagerCache.TmmDirectory, Path.GetFileName(previewFile?.ToString() ?? string.Empty));
+                    if (File.Exists(cachedPreview)) info.PreviewUrl = cachedPreview;
+                }
+                if (string.IsNullOrWhiteSpace(info.PreviewUrl) && archive.TryGetValue("preview_url", out var preview)) info.PreviewUrl = preview?.ToString() ?? string.Empty;
+                info.Source = "TaikoModArchive";
+            }
+            catch
+            {
+                // A damaged cache entry should never prevent an installed plugin from appearing.
+            }
+        }
+
         // --------------------------------------------------
         // Public so MainWindow can call it
         // --------------------------------------------------
@@ -220,8 +317,7 @@ namespace TaikoModManager
         {
             var (owner, repo) = ParseOwnerAndRepo(githubRepoUrl);
             string apiUrl = $"https://api.github.com/repos/{owner}/{repo}";
-            using HttpClient client = new HttpClient();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("TaikoModManager/1.0");
+            using HttpClient client = CreateGitHubClient();
             string resp = await client.GetStringAsync(apiUrl);
             using var doc = JsonDocument.Parse(resp);
             string name = doc.RootElement.GetProperty("name").GetString();
@@ -236,8 +332,7 @@ namespace TaikoModManager
         {
             var (owner, repo) = ParseOwnerAndRepo(githubRepoUrl);
             string apiUrl = $"https://api.github.com/repos/{owner}/{repo}/releases/latest";
-            using HttpClient client = new HttpClient();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("TaikoModManager/1.0");
+            using HttpClient client = CreateGitHubClient();
             string json = await client.GetStringAsync(apiUrl);
             using var doc = JsonDocument.Parse(json);
             string tagName = doc.RootElement.GetProperty("tag_name").GetString() ?? "UnknownVersion";
@@ -296,9 +391,11 @@ namespace TaikoModManager
                 string pluginFolder = Path.Combine(_pluginsPath, folderName);
                 Directory.CreateDirectory(pluginFolder);
 
+                string? primaryDll = primaryRfDll ?? extractedDlls.FirstOrDefault();
                 foreach (string dll in extractedDlls)
                 {
-                    InstallDll(dll, pluginFolder, folderName, repoDesc, repoAuthor, repoUrl, version);
+                    bool isPrimaryDll = string.Equals(dll, primaryDll, StringComparison.OrdinalIgnoreCase);
+                    InstallDll(dll, pluginFolder, folderName, repoDesc, repoAuthor, repoUrl, version, isPrimaryDll);
                 }
             }
             finally
@@ -309,7 +406,7 @@ namespace TaikoModManager
         }
 
         private void InstallDll(string dllPath, string pluginFolder, string pluginName,
-                                string pluginDesc, string pluginAuthor, string repoUrl, string version)
+                                string pluginDesc, string pluginAuthor, string repoUrl, string version, bool createMetadata)
         {
             string dllName = Path.GetFileName(dllPath);
             string dest = Path.Combine(pluginFolder, dllName);
@@ -320,26 +417,27 @@ namespace TaikoModManager
                 try { File.Delete(dllPath); } catch { /* ignore */ }
             }
 
-            string tomlFile = Path.Combine(_dataPath, dllName + ".toml");
-            if (!File.Exists(tomlFile))
+            string tomlFile = ManagerCache.GitHubPluginMetadataPath(dllName);
+            if (createMetadata && !File.Exists(tomlFile))
             {
-                CreateMetadataFile(dest, pluginName, pluginDesc, pluginAuthor, repoUrl, version);
+                CreateMetadataFile(dest, pluginName, pluginDesc, pluginAuthor, repoUrl, version, dllName);
             }
         }
 
         private void CreateMetadataFile(string dllFullPath, string pluginName,
                                         string pluginDesc, string pluginAuthor,
-                                        string repoUrl, string version)
+                                        string repoUrl, string version, string primaryDllName)
         {
             string dllName = Path.GetFileName(dllFullPath);
-            string tomlFile = Path.Combine(_dataPath, dllName + ".toml");
+            string tomlFile = ManagerCache.GitHubPluginMetadataPath(dllName);
             var pluginSec = new TomlTable
             {
                 ["name"] = pluginName,
                 ["author"] = pluginAuthor,
                 ["description"] = pluginDesc,
                 ["repo_url"] = repoUrl,
-                ["version"] = version
+                ["version"] = version,
+                ["primary_dll"] = primaryDllName
             };
             var meta = new TomlTable { ["plugin"] = pluginSec };
 
@@ -363,6 +461,20 @@ namespace TaikoModManager
             return (owner, repository);
         }
 
+        private HttpClient CreateGitHubClient()
+        {
+            var client = new HttpClient();
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("TaikoModManager/1.0");
+
+            if (!string.IsNullOrWhiteSpace(_githubApiKey))
+            {
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _githubApiKey);
+            }
+
+            return client;
+        }
+
         public async Task UpdateAllPluginsAsync(Action<string> logAction)
         {
             foreach (string pluginFolder in Directory.GetDirectories(_pluginsPath))
@@ -370,7 +482,7 @@ namespace TaikoModManager
                 foreach (string dllFile in Directory.GetFiles(pluginFolder, "*.dll", SearchOption.TopDirectoryOnly))
                 {
                     string dllName = Path.GetFileName(dllFile);
-                    string tomlPath = Path.Combine(_dataPath, dllName + ".toml");
+                    string tomlPath = ManagerCache.GitHubPluginMetadataPath(dllName);
                     if (!File.Exists(tomlPath)) continue;
 
                     var tomlString = File.ReadAllText(tomlPath);

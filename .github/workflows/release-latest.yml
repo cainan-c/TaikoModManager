@@ -1,0 +1,56 @@
+name: Build and release latest
+
+on:
+  push:
+    branches:
+      - rewrite
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and release latest commit
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the commit being released
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build and publish
+        shell: cmd
+        run: cmd /c "build.bat < nul"
+
+      - name: Package published application
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'TaikoModManager-win-x64.7z'
+          $sevenZip = Join-Path $env:GITHUB_WORKSPACE 'TaikoModManager\7z\7z.exe'
+          & $sevenZip a $archive "$env:GITHUB_WORKSPACE\Release\TaikoModManager\*"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create the release archive.' }
+          "RELEASE_ARCHIVE=$archive" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_TAG=build-$($env:GITHUB_SHA.Substring(0, 12))" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $title = "Latest build ($($env:GITHUB_SHA.Substring(0, 12)))"
+          $notes = "Automated build from commit $env:GITHUB_SHA."
+          gh release view $env:RELEASE_TAG 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:RELEASE_TAG $env:RELEASE_ARCHIVE --clobber
+            gh release edit $env:RELEASE_TAG --title $title --notes $notes --latest
+          }
+          else {
+            gh release create $env:RELEASE_TAG $env:RELEASE_ARCHIVE --target $env:GITHUB_SHA --title $title --notes $notes --latest
+          }

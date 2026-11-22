@@ -18,6 +18,9 @@
     <RepositoryType>git</RepositoryType>
     <NeutralLanguage>en-GB</NeutralLanguage>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
+	<!-- build.bat supplies the commit-derived values for release builds. -->
+	<Version>0.0.0-git.local</Version>
+	<InformationalVersion>0.0.0-git.local+local</InformationalVersion>
 	<PublishDir>$(MSBuildProjectDirectory)\bin\Release\TaikoModManager-$(Version)\</PublishDir>
     <ApplicationIcon>res\app-icon.ico</ApplicationIcon>
   </PropertyGroup>
@@ -32,28 +35,14 @@
 
   <ItemGroup>
     <Content Include="res\app-icon.ico" />
+    <Resource Include="res\rhythm-festival-keyart-512.jpg" />
   </ItemGroup>
 
 	<ItemGroup>
-		<None Include="..\UpdateHelper\bin\Release\net8.0\UpdateHelper.exe">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-	</ItemGroup>
-
-	<ItemGroup>
-		<None Include="..\UpdateHelper\bin\Release\net8.0\UpdateHelper.dll">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-	</ItemGroup>
-
-	<ItemGroup>
-		<None Include="..\UpdateHelper\bin\Release\net8.0\UpdateHelper.runtimeconfig.json">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-	</ItemGroup>
-	
-	<ItemGroup>
 		<None Include="..\TaikoModManager\7z\7z.exe">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Include="..\TaikoModManager\7z\7z.dll">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
 	</ItemGroup>		
@@ -70,6 +59,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.17.2" />
     <PackageReference Include="Tomlyn" Version="0.18.0" />
   </ItemGroup>
 

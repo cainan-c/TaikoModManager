@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows;    // For MessageBox, if desired
 using Tomlyn;           // For Toml parsing
 using Tomlyn.Model;
@@ -10,22 +11,29 @@ namespace TaikoModManager
     public class ModsTab
     {
         private readonly string _gamePath;
-        private readonly string _tekaTekaDllPath;    // BepInEx/plugins/RF.TekaTeka.dll
+        private readonly string[] _tekaTekaDllPaths;
         private readonly string _tekaSongsPath;      // [GameDir]/TekaSongs
 
         public ModsTab(string gamePath)
         {
             _gamePath = gamePath;
-            _tekaTekaDllPath = Path.Combine(gamePath, "BepInEx", "plugins", "RF.TekaTeka", "RF.TekaTeka.dll");
+            _tekaTekaDllPaths = new[]
+            {
+                // Original manual-install layout.
+                Path.Combine(gamePath, "BepInEx", "plugins", "RF.TekaTeka", "RF.TekaTeka.dll"),
+                // Taiko Mod Manager archive layout (post 3 is installed as TekaTeka).
+                Path.Combine(gamePath, "BepInEx", "plugins", "TekaTeka", "RF.TekaTeka.dll"),
+                Path.Combine(gamePath, "BepInEx", "plugins", "TekaTeka", "TekaTeka.dll")
+            };
             _tekaSongsPath = Path.Combine(gamePath, "TekaSongs");
         }
 
         /// <summary>
-        /// Checks if TekaTeka is installed (RF.TekaTeka.dll exists).
+        /// Checks both the legacy and manager-installed TekaTeka layouts.
         /// </summary>
         public bool IsTekaTekaInstalled()
         {
-            return File.Exists(_tekaTekaDllPath);
+            return _tekaTekaDllPaths.Any(File.Exists);
         }
 
         /// <summary>
@@ -100,7 +108,8 @@ namespace TaikoModManager
             var modInfo = new TekaTekaModInfo
             {
                 ConfigPath = configPath,
-                CanEnable = IsTekaTekaInstalled()
+                CanEnable = IsTekaTekaInstalled(),
+                Source = "External"
             };
 
             try
@@ -136,7 +145,43 @@ namespace TaikoModManager
                 modInfo.Name = Path.GetFileNameWithoutExtension(configPath);
             }
 
+            ApplyArchiveMetadata(modInfo, Path.GetFileName(Path.GetDirectoryName(configPath) ?? string.Empty));
+
             return modInfo;
+        }
+
+        private void ApplyArchiveMetadata(TekaTekaModInfo modInfo, string installedFolder)
+        {
+            string metadataPath = ManagerCache.ArchiveSongMetadataPath(installedFolder);
+            if (!File.Exists(metadataPath))
+            {
+                return;
+            }
+
+            try
+            {
+                var model = Toml.ToModel(File.ReadAllText(metadataPath));
+                if (!model.TryGetValue("archive", out var archiveObj) || archiveObj is not TomlTable archive)
+                {
+                    return;
+                }
+
+                if (archive.TryGetValue("name", out var name)) modInfo.Name = name?.ToString() ?? modInfo.Name;
+                if (archive.TryGetValue("author", out var author)) modInfo.Author = author?.ToString() ?? modInfo.Author;
+                if (archive.TryGetValue("description", out var description)) modInfo.Description = description?.ToString() ?? modInfo.Description;
+                if (archive.TryGetValue("last_updated", out var lastUpdated)) modInfo.LastUpdated = lastUpdated?.ToString() ?? string.Empty;
+                if (archive.TryGetValue("preview_file", out var previewFile))
+                {
+                    string cachedPreview = Path.Combine(ManagerCache.TmmDirectory, Path.GetFileName(previewFile?.ToString() ?? string.Empty));
+                    if (File.Exists(cachedPreview)) modInfo.PreviewUrl = cachedPreview;
+                }
+                if (string.IsNullOrWhiteSpace(modInfo.PreviewUrl) && archive.TryGetValue("preview_url", out var preview)) modInfo.PreviewUrl = preview?.ToString() ?? string.Empty;
+                modInfo.Source = "TaikoModArchive";
+            }
+            catch
+            {
+                // A damaged archive cache entry should not hide the mod.
+            }
         }
     }
 
@@ -151,6 +196,20 @@ namespace TaikoModManager
         public string Name { get; set; }
         public string Version { get; set; }
         public string Description { get; set; }
+        public string Source { get; set; } = "External";
+        public string PreviewUrl { get; set; } = string.Empty;
+        public string LastUpdated { get; set; } = string.Empty;
+        public string VersionDisplay =>
+            string.Equals(Source, "TaikoModArchive", StringComparison.OrdinalIgnoreCase)
+                ? string.IsNullOrWhiteSpace(LastUpdated)
+                    ? "Last updated unavailable"
+                    : $"Last updated {FormatArchiveTimestamp(LastUpdated)}"
+                : $"Version {Version}";
+
+        private static string FormatArchiveTimestamp(string timestamp) =>
+            DateTimeOffset.TryParse(timestamp, out DateTimeOffset value)
+                ? value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")
+                : timestamp;
 
         // NEW: the author property
         public string Author { get; set; }
