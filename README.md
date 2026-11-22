@@ -2,10 +2,6 @@
 
 Taiko Mod Manager is a tool designed to enhance your experience with the Steam Release of *Taiko no Tatsujin: Rhythm Festival*. It provides features for managing mods, plugins, and configurations, with integration for BepInEx.
 
-## AI disclosure
-
-The `rewrite` branch was developed with substantial assistance from OpenAI Codex. AI was used for implementation and UI work; project maintainers remain responsible for reviewing, testing, and shipping the code.
-
 ![A screenshot of Taiko Mod Manager, showing the plugin manager screen.](TaikoModManager/res/readme-screenshot.png "Main Window")
 
 ## Features
@@ -83,6 +79,10 @@ The application attempts to locate the game automatically by checking Steam libr
 ## Contributing
 
 Contributions are welcome! Feel free to submit issues or pull requests.
+
+## AI disclosure
+
+The `rewrite` and `archive` branch were developed with substantial assistance from OpenAI Codex. AI was used for implementation and UI work; project maintainers remain responsible for reviewing, testing, and shipping the code.
 
 ## License
 
